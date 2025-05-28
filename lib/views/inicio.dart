@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../view_models/home_view_model.dart';
 
-class InicioScreen extends ConsumerWidget {
-  const InicioScreen({super.key});
+class Inicio extends ConsumerWidget {
+  const Inicio({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

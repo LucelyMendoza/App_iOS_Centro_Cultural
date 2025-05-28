@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 import 'inicio.dart';
 
-class MenuScreen extends StatefulWidget {
-  const MenuScreen({super.key});
+class Menu extends StatefulWidget {
+  const Menu({super.key});
 
   @override
-  State<MenuScreen> createState() => _MenuScreenState();
+  State<Menu> createState() => _MenuState();
 }
 
-class _MenuScreenState extends State<MenuScreen> {
+class _MenuState extends State<Menu> {
   int _selectedIndex = 0;
 
   final List<Widget> _screens = [
-    const InicioScreen(),
+    const Inicio(),
     const Center(child: Text('Perfil (en desarrollo)')),
     const Center(child: Text('Configuración (en desarrollo)')),
   ];
