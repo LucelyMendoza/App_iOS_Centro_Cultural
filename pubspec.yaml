@@ -55,6 +55,9 @@ flutter:
   # Agrega tus assets aquí
   assets:
     - assets/logo.png
+    - assets/libertad.png
+    - assets/atardecer.png
+    - assets/misti.png
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.
@@ -90,3 +93,5 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+

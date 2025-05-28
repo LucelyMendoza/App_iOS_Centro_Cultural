@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import '../view/paintings_list_screen.dart';
 void main() => runApp(MyApp());
 
 class MyApp extends StatelessWidget {
@@ -93,7 +93,26 @@ class MenuScreen extends StatelessWidget {
         title: Text("Menú Principal"),
       ),
       body: Center(
-        child: Text("Bienvenido al menú principal"),
+       child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              'Aquí comienza tu recorrido por el Centro Cultural UNSA.',
+              style: TextStyle(fontSize: 20),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => PaintingsListScreen()),
+                );
+              },
+              child: Text('Ver obras'),
+            ),
+          ],
+        ),
       ),
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
