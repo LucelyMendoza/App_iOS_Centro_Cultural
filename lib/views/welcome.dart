@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'menu.dart';
+import 'post_list_page.dart';
 
 class Welcome extends StatelessWidget {
   const Welcome({super.key});
@@ -53,6 +54,32 @@ class Welcome extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 18,
                     color: Color(0xFFF7ECD8),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 50),
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blueGrey,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                ),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PostListPage()),
+                  );
+                },
+                child: const Text(
+                  'Probar API RESTful',
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: Colors.white,
                   ),
                 ),
               ),
