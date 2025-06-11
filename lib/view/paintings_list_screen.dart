@@ -3,14 +3,21 @@ import '../model/painting.dart';
 import '../viewmodel/paintings_viewmodel.dart';
 import 'painting_detail_screen.dart';
 
+class PaintingsListScreen extends StatelessWidget {
+  const PaintingsListScreen({super.key});
 
-
-class PaintingsListScreen extends StatefulWidget {
   @override
-  _PaintingsListScreenState createState() => _PaintingsListScreenState();
+  Widget build(BuildContext context) {
+    return _PaintingsListContent();
+  }
 }
 
-class _PaintingsListScreenState extends State<PaintingsListScreen> {
+class _PaintingsListContent extends StatefulWidget {
+  @override
+  __PaintingsListContentState createState() => __PaintingsListContentState();
+}
+
+class __PaintingsListContentState extends State<_PaintingsListContent> {
   final PaintingsViewModel viewModel = PaintingsViewModel();
   List<Painting> filteredPaintings = [];
   String searchQuery = '';
@@ -29,14 +36,16 @@ class _PaintingsListScreenState extends State<PaintingsListScreen> {
   }
 
   void filterDialog() {
-    // Aquí podrías abrir un modal para filtrar por autor, época, etc.
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text('Filtrar'),
-        content: Text('Aquí puedes agregar filtros personalizados.'),
+        title: const Text('Filtrar'),
+        content: const Text('Aquí puedes agregar filtros personalizados.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text('Cerrar'))
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cerrar'),
+          )
         ],
       ),
     );
@@ -46,44 +55,42 @@ class _PaintingsListScreenState extends State<PaintingsListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Lista de obras', textAlign: TextAlign.center),
+        title: const Text('Lista de obras', textAlign: TextAlign.center),
         centerTitle: true,
       ),
       body: Padding(
-        padding: EdgeInsets.all(12.0),
+        padding: const EdgeInsets.all(12.0),
         child: Column(
           children: [
-            // Campo de búsqueda y botón de filtro
             Row(
               children: [
                 Expanded(
                   child: TextField(
                     onChanged: updateSearch,
-                    decoration: InputDecoration(
+                    decoration: const InputDecoration(
                       labelText: 'Buscar obra',
                       border: OutlineInputBorder(),
                       prefixIcon: Icon(Icons.search),
                     ),
                   ),
                 ),
-                SizedBox(width: 10),
+                const SizedBox(width: 10),
                 IconButton(
                   onPressed: filterDialog,
-                  icon: Icon(Icons.filter_list),
+                  icon: const Icon(Icons.filter_list),
                   tooltip: 'Filtrar',
                 ),
               ],
             ),
-            SizedBox(height: 12),
-            // Lista de obras
+            const SizedBox(height: 12),
             Expanded(
               child: ListView.builder(
                 itemCount: filteredPaintings.length,
                 itemBuilder: (context, index) {
                   final painting = filteredPaintings[index];
                   return Card(
-                    color: Color(0xFFF7ECD8),
-                    margin: EdgeInsets.symmetric(vertical: 6),
+                    color: const Color(0xFFF7ECD8),
+                    margin: const EdgeInsets.symmetric(vertical: 6),
                     child: ListTile(
                       leading: Image.asset(
                         painting.imagePath,
@@ -94,14 +101,13 @@ class _PaintingsListScreenState extends State<PaintingsListScreen> {
                       title: Text(painting.title),
                       subtitle: Text(' ${painting.author}'),
                       onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => PaintingDetailScreen(painting: painting),
-                        ),
-                      );
-                    },
-
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => PaintingDetailScreen(painting: painting),
+                          ),
+                        );
+                      },
                     ),
                   );
                 },
