@@ -1,13 +1,44 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import '../models/painting.dart';
 
-class PaintingDetailScreen extends StatelessWidget {
+class PaintingDetailScreen extends StatefulWidget {
   final Painting painting;
 
   const PaintingDetailScreen({Key? key, required this.painting}) : super(key: key);
 
   @override
+  _PaintingDetailScreenState createState() => _PaintingDetailScreenState();
+}
+
+class _PaintingDetailScreenState extends State<PaintingDetailScreen> {
+  final FlutterTts flutterTts = FlutterTts();
+
+  @override
+  void initState() {
+    super.initState();
+    _initTts();
+  }
+
+  void _initTts() async {
+    await flutterTts.setLanguage("es-ES"); // Español
+    await flutterTts.setSpeechRate(0.5);   // Velocidad de lectura
+  }
+
+  void _speakDescription() async {
+    await flutterTts.speak(widget.painting.details);
+  }
+
+  @override
+  void dispose() {
+    flutterTts.stop(); // Detiene el TTS si se cambia de pantalla
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final painting = widget.painting;
+
     return Scaffold(
       appBar: AppBar(
         centerTitle: true,
@@ -34,8 +65,6 @@ class PaintingDetailScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
-
-            // Título
             Text(
               painting.title,
               style: const TextStyle(
@@ -45,10 +74,7 @@ class PaintingDetailScreen extends StatelessWidget {
               ),
               textAlign: TextAlign.left,
             ),
-
             const SizedBox(height: 6),
-
-            // Galería con ícono
             Row(
               children: [
                 const Icon(Icons.location_on, size: 18),
@@ -59,18 +85,12 @@ class PaintingDetailScreen extends StatelessWidget {
                 ),
               ],
             ),
-
             const SizedBox(height: 6),
-
-            // Autor y año en la misma línea
             Text(
               '${painting.author} · ${painting.year}',
               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w400),
             ),
-
             const SizedBox(height: 12),
-
-            // Descripción y botón de audio al costado
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -87,9 +107,7 @@ class PaintingDetailScreen extends StatelessWidget {
                   backgroundColor: Colors.grey[200],
                   child: IconButton(
                     icon: const Icon(Icons.volume_up),
-                    onPressed: () {
-                      // Aquí iría tu lógica de TextToSpeech
-                    },
+                    onPressed: _speakDescription,
                   ),
                 ),
               ],

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'inicio.dart';
 import 'mapa_screen.dart';
-import 'paintings_list_screen.dart'; // Asegúrate que esta ruta sea correcta
+import 'paintings_list_screen.dart'; 
+import 'ubicacion_page.dart';
 
 class Menu extends StatefulWidget {
   const Menu({super.key});
@@ -16,7 +17,7 @@ class _MenuState extends State<Menu> {
   final List<Widget> _screens = [
     const Inicio(),
     const PaintingsListScreen(), // Cambiado directamente a tu widget
-    const Center(child: Text('QR (en desarrollo)')),
+    UbicacionPage(),
     const MapaScreen(),
   ];
 
