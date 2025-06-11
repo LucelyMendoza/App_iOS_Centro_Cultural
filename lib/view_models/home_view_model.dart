@@ -14,11 +14,11 @@ class HomeViewModel extends StateNotifier<HomeState> {
 
   void _loadMockData() {
     state = state.copyWith(
-      featuredArtist: Artist(
-        name: 'Rommel Paredes',
-        username: '@rommelparedes',
-        image: 'assets/prueba.jpg',
-      ),
+     // featuredArtist: Artist(
+        // name: 'Rommel Paredes',
+        // username: '@rommelparedes',
+        // image: 'assets/prueba.jpg',
+      //),
       galleries: [
         Gallery(title: 'Galería I', location: 'Primer patio', image: 'assets/prueba.jpg'),
         Gallery(title: 'Galería II', location: 'Primer patio', image: 'assets/prueba.jpg'),

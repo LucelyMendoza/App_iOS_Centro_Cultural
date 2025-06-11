@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mi_app/models/artist.dart';
+import 'package:mi_app/views/artist_page.dart';
 import 'views/welcome.dart';
 
 void main() {
@@ -18,7 +20,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.red,
       ),
-      home: const Welcome(),
+      home: const ArtistPage(),
     );
   }
 }
