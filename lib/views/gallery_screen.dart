@@ -9,7 +9,8 @@ import '../view_models/paintings_viewmodel.dart';
 class GalleryScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final viewModel = ref.watch(paintingsViewModelProvider);
+    final viewModel = ref.watch(paintingsViewModelAsyncProvider);
+
 
     return viewModel.when(
       data: (vm) {

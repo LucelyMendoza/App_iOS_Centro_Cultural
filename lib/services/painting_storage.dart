@@ -13,14 +13,10 @@ class PaintingStorage {
   late Box<Painting> _box;
 
   Future<void> init() async {
-  await Hive.initFlutter();
-
-  if (!Hive.isAdapterRegistered(0)) {
+    await Hive.initFlutter();
     Hive.registerAdapter(PaintingAdapter());
+    _box = await Hive.openBox<Painting>(_boxName);
   }
-
-  _box = await Hive.openBox<Painting>(_boxName);
-}
 
   Future<void> savePainting(Painting painting) async {
     await _box.put(painting.id, painting);
