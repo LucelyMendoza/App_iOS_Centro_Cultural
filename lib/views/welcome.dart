@@ -10,10 +10,7 @@ class Welcome extends StatelessWidget {
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [
-              Color(0xFFF7ECD8),
-              Color(0xFFF7ECD8),
-            ],
+            colors: [Color(0xFFF7ECD8), Color(0xFFF7ECD8)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -50,14 +47,10 @@ class Welcome extends StatelessWidget {
                 },
                 child: const Text(
                   'Comenzar Recorrido',
-                  style: TextStyle(
-                    fontSize: 18,
-                    color: Color(0xFFF7ECD8),
-                  ),
+                  style: TextStyle(fontSize: 18, color: Color(0xFFF7ECD8)),
                 ),
               ),
             ),
-        
           ],
         ),
       ),

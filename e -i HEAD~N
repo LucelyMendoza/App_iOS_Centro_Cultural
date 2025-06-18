@@ -1,0 +1,47 @@
+[33mcommit 254281100305e0a5b26632741fe8c788b2aa7bd1[m[33m ([m[1;36mHEAD[m[33m)[m
+Author: LucelyMendoza <lmendoza@unsa.edu.pe>
+Date:   Wed Jun 18 03:22:42 2025 -0500
+
+    Firebase for users registration CRUD and login
+
+[33mcommit f9f9724548a97a225e46fa13384b3687d50548d3[m
+Author: LucelyMendoza <lmendoza@unsa.edu.pe>
+Date:   Wed Jun 18 03:20:44 2025 -0500
+
+    firebase for create users and login users
+
+[33mcommit 855090958008b4209fa85c2d15eccdaf47df65a1[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m
+Author: KevinTacuri <ktacurim@unsa.edu.pe>
+Date:   Tue Jun 17 23:30:33 2025 -0500
+
+    Cupertino/Material
+
+[33mcommit 99016cf01932bea46372ad66140aafbc24a536bd[m
+Author: LucelyMendoza <lmendoza@unsa.edu.pe>
+Date:   Tue Jun 17 20:21:24 2025 -0500
+
+    Vista de mapa
+
+[33mcommit 99954c7a8842cc5ae718347d19f5f145e20ece0d[m
+Author: Glenny <gchoquevi@unsa.edu.pe>
+Date:   Wed Jun 11 15:22:59 2025 -0500
+
+    view de ubicacion, reconoce el beacon
+
+[33mcommit 1aec4c329a4b1d5e35be39ab716549c77a29f3fa[m
+Author: LucelyMendoza <lmendoza@unsa.edu.pe>
+Date:   Wed Jun 4 17:25:09 2025 -0500
+
+    Implementación de todas las partes del menu
+
+[33mcommit 7e061d4e8b1e9566d0d2b74bd08a849cb6531da0[m
+Author: Rommel <rparedesba@unsa.edu.pe>
+Date:   Sun May 25 20:50:23 2025 -0500
+
+    Agregado backend Node.js MQTT al repositorio iOS
+
+[33mcommit 4ca18a45de785b687c353153aab4203e1908d788[m
+Author: LucelyMendoza <lmendoza@unsa.edu.pe>
+Date:   Wed May 21 10:57:13 2025 -0500
+
+    Proyecto en flutter - iOs

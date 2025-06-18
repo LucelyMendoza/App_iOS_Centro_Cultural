@@ -45,7 +45,7 @@ class __PaintingsListContentState extends State<_PaintingsListContent> {
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Cerrar'),
-          )
+          ),
         ],
       ),
     );
@@ -55,8 +55,17 @@ class __PaintingsListContentState extends State<_PaintingsListContent> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Lista de obras', textAlign: TextAlign.center),
-        centerTitle: true,
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Lista de obras'),
+            IconButton(
+              icon: const Icon(Icons.filter_list),
+              onPressed: filterDialog,
+              tooltip: 'Filtrar',
+            ),
+          ],
+        ),
       ),
       body: Padding(
         padding: const EdgeInsets.all(12.0),
@@ -65,20 +74,37 @@ class __PaintingsListContentState extends State<_PaintingsListContent> {
             Row(
               children: [
                 Expanded(
-                  child: TextField(
-                    onChanged: updateSearch,
-                    decoration: const InputDecoration(
-                      labelText: 'Buscar obra',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.search),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(
+                        30,
+                      ), // Bordes redondeados
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black12,
+                          blurRadius: 4,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: TextField(
+                      onChanged: updateSearch,
+                      decoration: InputDecoration(
+                        hintText: 'Buscar obra...',
+                        prefixIcon: Icon(Icons.search),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(
+                            30,
+                          ), // Borde del campo redondeado
+                          borderSide: BorderSide.none,
+                        ),
+                        filled: true,
+                        fillColor: Colors.white,
+                        contentPadding: EdgeInsets.symmetric(vertical: 14),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                IconButton(
-                  onPressed: filterDialog,
-                  icon: const Icon(Icons.filter_list),
-                  tooltip: 'Filtrar',
                 ),
               ],
             ),
@@ -104,7 +130,8 @@ class __PaintingsListContentState extends State<_PaintingsListContent> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => PaintingDetailScreen(painting: painting),
+                            builder: (context) =>
+                                PaintingDetailScreen(painting: painting),
                           ),
                         );
                       },
