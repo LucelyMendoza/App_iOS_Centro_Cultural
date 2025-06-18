@@ -5,7 +5,7 @@ import '../models/painting.dart';
 class PaintingDetailScreen extends StatefulWidget {
   final Painting painting;
 
-  const PaintingDetailScreen({Key? key, required this.painting}) : super(key: key);
+  const PaintingDetailScreen({super.key, required this.painting});
 
   @override
   _PaintingDetailScreenState createState() => _PaintingDetailScreenState();
@@ -22,7 +22,7 @@ class _PaintingDetailScreenState extends State<PaintingDetailScreen> {
 
   void _initTts() async {
     await flutterTts.setLanguage("es-ES"); // Español
-    await flutterTts.setSpeechRate(0.5);   // Velocidad de lectura
+    await flutterTts.setSpeechRate(0.5); // Velocidad de lectura
   }
 
   void _speakDescription() async {
@@ -42,7 +42,10 @@ class _PaintingDetailScreenState extends State<PaintingDetailScreen> {
     return Scaffold(
       appBar: AppBar(
         centerTitle: true,
-        title: const Text('Detalles', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Detalles',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
@@ -81,7 +84,10 @@ class _PaintingDetailScreenState extends State<PaintingDetailScreen> {
                 const SizedBox(width: 6),
                 Text(
                   painting.gallery,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
             ),
