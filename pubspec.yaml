@@ -73,6 +73,7 @@ flutter:
     - assets/atardecer.jpg
     - assets/misti.png
     - assets/beacon.jpg
+    - assets/data/galerias.json
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in

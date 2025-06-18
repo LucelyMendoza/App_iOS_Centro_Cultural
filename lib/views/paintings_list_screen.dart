@@ -22,6 +22,19 @@ class __PaintingsListContentState extends State<_PaintingsListContent> {
   List<Painting> filteredPaintings = [];
   String searchQuery = '';
 
+  Widget buildImage(String path) {
+    if (path.startsWith('http')) {
+      return Image.network(
+        path,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) =>
+            const Icon(Icons.broken_image),
+      );
+    } else {
+      return Image.asset(path, fit: BoxFit.cover);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -118,11 +131,10 @@ class __PaintingsListContentState extends State<_PaintingsListContent> {
                     color: const Color(0xFFF7ECD8),
                     margin: const EdgeInsets.symmetric(vertical: 6),
                     child: ListTile(
-                      leading: Image.asset(
-                        painting.imagePath,
+                      leading: SizedBox(
                         width: 60,
                         height: 60,
-                        fit: BoxFit.cover,
+                        child: buildImage(painting.imagePath),
                       ),
                       title: Text(painting.title),
                       subtitle: Text(' ${painting.author}'),

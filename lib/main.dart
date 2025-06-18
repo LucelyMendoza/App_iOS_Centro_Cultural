@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart'; // Asegúrate de import
 import 'package:mi_app/views/welcome.dart';
 import 'package:firebase_core/firebase_core.dart';
 
+import '../services/upload_data_service.dart';
 import 'firebase_options.dart';
 
 void main() async {

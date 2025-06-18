@@ -9,32 +9,45 @@ class GalleryDetail extends StatelessWidget {
 
   GalleryDetail({Key? key, required this.gallery}) : super(key: key);
 
+  Widget buildImage(String path) {
+    if (path.startsWith('http')) {
+      return Image.network(
+        path,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) =>
+            const Icon(Icons.broken_image),
+      );
+    } else {
+      return Image.asset(path, fit: BoxFit.cover);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final List<Painting> paintings = _paintingsVM.allPaintings
-        .where((p) => p.gallery.toLowerCase().trim() == gallery.title.toLowerCase().trim())
+        .where(
+          (p) =>
+              p.gallery.toLowerCase().trim() ==
+              gallery.title.toLowerCase().trim(),
+        )
         .toList();
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(gallery.title),
-      ),
+      appBar: AppBar(title: Text(gallery.title)),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Image.asset(
-                gallery.image,
-                height: 200,
-                width: double.infinity,
-                fit: BoxFit.cover,
-              ),
+              SizedBox(height: 100, width: double.infinity),
               const SizedBox(height: 16),
               Text(
                 gallery.title,
-                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 4),
               Text(
@@ -59,20 +72,24 @@ class GalleryDetail extends StatelessWidget {
                   itemBuilder: (context, index) {
                     final painting = paintings[index];
                     return GestureDetector(
-                      onTap: () => _paintingsVM.goToPaintingDetail(context, painting),
+                      onTap: () =>
+                          _paintingsVM.goToPaintingDetail(context, painting),
                       child: Card(
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         elevation: 2,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             ClipRRect(
-                              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                              child: Image.asset(
-                                painting.imagePath,
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(12),
+                              ),
+                              child: SizedBox(
                                 height: 100,
                                 width: double.infinity,
-                                fit: BoxFit.cover,
+                                child: buildImage(painting.imagePath),
                               ),
                             ),
                             Padding(
@@ -82,7 +99,9 @@ class GalleryDetail extends StatelessWidget {
                                 children: [
                                   Text(
                                     painting.title,
-                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),

@@ -64,7 +64,10 @@ class _MenuState extends State<Menu> {
                   icon: Icon(Icons.search),
                   label: 'Búsqueda',
                 ),
-                BottomNavigationBarItem(icon: Icon(Icons.qr_code), label: 'QR'),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.location_on),
+                  label: 'Ubicación',
+                ),
                 BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Mapa'),
               ],
             ),
