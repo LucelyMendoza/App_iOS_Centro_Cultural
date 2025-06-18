@@ -96,6 +96,16 @@ class _UbicacionPageState extends State<UbicacionPage> {
             onPressed: isScanning ? null : escanearDispositivos,
             child: Text(isScanning ? 'Escaneando...' : 'Escanear iBeacon'),
           ),
+          const SizedBox(height: 20),
+          Center(
+            child: Image.asset(
+              'assets/beacon.jpg', // Ruta de tu imagen en assets
+              width: MediaQuery.of(context).size.width * 0.9,
+              height: MediaQuery.of(context).size.height * 0.4,
+              fit: BoxFit.contain,
+            ),
+          ),
+          const SizedBox(height: 20),
           Expanded(
             child: ListView(
               children: rssiFiltrado.entries.map((entry) {

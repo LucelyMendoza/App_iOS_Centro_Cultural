@@ -29,9 +29,12 @@ class PaintingsViewModel {
   ];
 
   List<Painting> filterPaintings(String query) {
-    return allPaintings.where((painting) =>
-      painting.title.toLowerCase().contains(query.toLowerCase()) ||
-      painting.author.toLowerCase().contains(query.toLowerCase())
-    ).toList();
+    return allPaintings
+        .where(
+          (painting) =>
+              painting.title.toLowerCase().contains(query.toLowerCase()) ||
+              painting.author.toLowerCase().contains(query.toLowerCase()),
+        )
+        .toList();
   }
 }
