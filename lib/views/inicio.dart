@@ -8,6 +8,7 @@ class Inicio extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(homeViewModelProvider);
+    final viewModel = ref.read(homeViewModelProvider.notifier);
 
     return Scaffold(
       body: SafeArea(
@@ -55,6 +56,7 @@ class Inicio extends ConsumerWidget {
                       leading: Image.asset(gallery.image, width: 50, fit: BoxFit.cover),
                       title: Text(gallery.title),
                       subtitle: Text(gallery.location),
+                      onTap: () => viewModel.goToGalleryDetail(context, gallery),
                     ),
                   );
                 },

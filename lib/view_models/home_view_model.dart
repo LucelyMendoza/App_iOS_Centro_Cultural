@@ -1,7 +1,9 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/home_state.dart';
 import '../models/artist.dart';
 import '../models/gallery.dart';
+import '../views/gallery_detail.dart'; // Asegúrate de tener esta vista
 
 final homeViewModelProvider = StateNotifierProvider<HomeViewModel, HomeState>((ref) {
   return HomeViewModel();
@@ -28,6 +30,15 @@ class HomeViewModel extends StateNotifier<HomeState> {
         Gallery(title: 'Galería VI', location: 'Segundo patio', image: 'assets/prueba.jpg'),
         Gallery(title: 'Galería VII', location: 'Tercer patio', image: 'assets/prueba.jpg'),
       ],
+    );
+  }
+
+  void goToGalleryDetail(BuildContext context, Gallery gallery) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => GalleryDetail(gallery: gallery),
+      ),
     );
   }
 }
