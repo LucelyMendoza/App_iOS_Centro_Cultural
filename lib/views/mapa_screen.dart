@@ -38,6 +38,25 @@ class MapaScreen extends StatelessWidget {
                   ],
                 ),
                 SizedBox(height: 10),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Color(0xFF84030C),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  onPressed: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text("Ubicación no disponible por ahora"),
+                      ),
+                    );
+                  },
+                  child: Text(
+                    "Determine su ubicación",
+                    style: TextStyle(color: Color(0xFFD1AA65), fontSize: 12),
+                  ),
+                ),
               ],
             ),
           ),
