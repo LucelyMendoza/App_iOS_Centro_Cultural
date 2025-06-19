@@ -21,6 +21,7 @@ class __PaintingsListContentState extends State<_PaintingsListContent> {
   final PaintingsViewModel viewModel = PaintingsViewModel();
   List<Painting> filteredPaintings = [];
   String searchQuery = '';
+  bool isLoading = true;
 
   Widget buildImage(String path) {
     if (path.startsWith('http')) {
@@ -38,7 +39,12 @@ class __PaintingsListContentState extends State<_PaintingsListContent> {
   @override
   void initState() {
     super.initState();
-    filteredPaintings = viewModel.allPaintings;
+    viewModel.loadPaintings().then((_) {
+      setState(() {
+        filteredPaintings = viewModel.allPaintings;
+        isLoading = false;
+      });
+    });
   }
 
   void updateSearch(String query) {
@@ -66,6 +72,10 @@ class __PaintingsListContentState extends State<_PaintingsListContent> {
 
   @override
   Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Row(
@@ -90,10 +100,8 @@ class __PaintingsListContentState extends State<_PaintingsListContent> {
                   child: Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(
-                        30,
-                      ), // Bordes redondeados
-                      boxShadow: [
+                      borderRadius: BorderRadius.circular(30),
+                      boxShadow: const [
                         BoxShadow(
                           color: Colors.black12,
                           blurRadius: 4,
@@ -105,16 +113,16 @@ class __PaintingsListContentState extends State<_PaintingsListContent> {
                       onChanged: updateSearch,
                       decoration: InputDecoration(
                         hintText: 'Buscar obra...',
-                        prefixIcon: Icon(Icons.search),
+                        prefixIcon: const Icon(Icons.search),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(
-                            30,
-                          ), // Borde del campo redondeado
+                          borderRadius: BorderRadius.circular(30),
                           borderSide: BorderSide.none,
                         ),
                         filled: true,
                         fillColor: Colors.white,
-                        contentPadding: EdgeInsets.symmetric(vertical: 14),
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 14,
+                        ),
                       ),
                     ),
                   ),
@@ -137,16 +145,9 @@ class __PaintingsListContentState extends State<_PaintingsListContent> {
                         child: buildImage(painting.imagePath),
                       ),
                       title: Text(painting.title),
-                      subtitle: Text(' ${painting.author}'),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                PaintingDetailScreen(painting: painting),
-                          ),
-                        );
-                      },
+                      subtitle: Text(painting.author),
+                      onTap: () =>
+                          viewModel.goToPaintingDetail(context, painting),
                     ),
                   );
                 },
