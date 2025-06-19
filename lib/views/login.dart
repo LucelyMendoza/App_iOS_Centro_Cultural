@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../view_models/auth_view_model.dart';
 import 'register.dart';
 
-class LoginView extends ConsumerWidget {
-  const LoginView({super.key});
+class Login extends ConsumerWidget {
+  const Login({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

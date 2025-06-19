@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'login.dart';
 import 'register.dart';
-import 'inicio.dart';
+import 'menu.dart';
 
 class Welcome extends StatelessWidget {
   const Welcome({super.key});
@@ -37,7 +37,7 @@ class Welcome extends StatelessWidget {
                 const SizedBox(height: 40),
                 Image.asset('assets/logo.png', height: 250),
                 const SizedBox(height: 40),
-                
+
                 // Botón: Continuar como invitado
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 50),
@@ -56,7 +56,7 @@ class Welcome extends StatelessWidget {
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => const Inicio()),
+                          MaterialPageRoute(builder: (_) => const Menu()),
                         );
                       },
                       child: const Text(
@@ -89,7 +89,7 @@ class Welcome extends StatelessWidget {
                       onPressed: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => const LoginView()),
+                          MaterialPageRoute(builder: (_) => const Login()),
                         );
                       },
                       child: const Text(

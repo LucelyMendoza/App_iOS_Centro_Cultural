@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'login.dart';
 
-class SuccessView extends StatelessWidget {
-  const SuccessView({super.key});
+class Success extends StatelessWidget {
+  const Success({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +48,7 @@ class SuccessView extends StatelessWidget {
                   onPressed: () {
                     Navigator.pushReplacement(
                       context,
-                      MaterialPageRoute(builder: (_) => const LoginView()),
+                      MaterialPageRoute(builder: (_) => const Login()),
                     );
                   },
                   style: ElevatedButton.styleFrom(

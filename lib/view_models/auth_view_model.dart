@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/user.dart' as model;
 import '../views/success.dart';
-import '../views/inicio.dart';
+import '../views/menu.dart';
 
 final authViewModelProvider = ChangeNotifierProvider<AuthViewModel>((ref) => AuthViewModel());
 
@@ -26,7 +26,7 @@ class AuthViewModel extends ChangeNotifier {
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const SuccessView()),
+        MaterialPageRoute(builder: (_) => const Success()),
       );
     } catch (e) {
       loading = false;
@@ -61,7 +61,7 @@ class AuthViewModel extends ChangeNotifier {
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const Inicio()),
+        MaterialPageRoute(builder: (_) => const Menu()),
       );
     } catch (e) {
       loading = false;
