@@ -28,11 +28,27 @@ class __PaintingsListContentState extends State<_PaintingsListContent> {
       return Image.network(
         path,
         fit: BoxFit.cover,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Center(
+            child: CircularProgressIndicator(
+              value: loadingProgress.expectedTotalBytes != null
+                  ? loadingProgress.cumulativeBytesLoaded /
+                        loadingProgress.expectedTotalBytes!
+                  : null,
+            ),
+          );
+        },
         errorBuilder: (context, error, stackTrace) =>
             const Icon(Icons.broken_image),
       );
     } else {
-      return Image.asset(path, fit: BoxFit.cover);
+      return Image.asset(
+        path,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) =>
+            const Icon(Icons.broken_image),
+      );
     }
   }
 
