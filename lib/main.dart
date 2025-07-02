@@ -3,6 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_platform_widgets/flutter_platform_widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart'; // Asegúrate de importar esto
 import 'package:mi_app/views/welcome.dart';
+import 'package:mi_app/views/realtime_test.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import '../services/upload_data_service.dart';
@@ -29,7 +30,7 @@ class MyApp extends StatelessWidget {
           primaryColor: CupertinoColors.systemRed,
         ),
       ),
-      home: const Welcome(),
+      home: const RealtimeTest(),
     );
   }
 }
