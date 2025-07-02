@@ -3,6 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_localizations/flutter_localizations.dart'; // Importante
 import 'package:flutter_platform_widgets/flutter_platform_widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mi_app/views/sensor_control_view.dart';
 import 'package:mi_app/views/welcome.dart';
 import 'package:mi_app/views/realtime_test.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -44,7 +45,11 @@ class MyApp extends StatelessWidget {
         ),
         // Igual aquí, pero ya los delegados los pusimos globalmente arriba
       ),
+<<<<<<< Updated upstream
       home: const RealtimeTest(),
+=======
+      home: const SensorControlView(),
+>>>>>>> Stashed changes
     );
   }
 }
