@@ -30,10 +30,7 @@ class MyApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
         DefaultWidgetsLocalizations.delegate,
       ],
-      supportedLocales: const [
-        Locale('en', ''),
-        Locale('es', ''),
-      ],
+      supportedLocales: const [Locale('en', ''), Locale('es', '')],
       material: (_, __) => MaterialAppData(
         theme: ThemeData(primarySwatch: Colors.red),
         // Opcional: aquí también puedes agregar localizations si quieres

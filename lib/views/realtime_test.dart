@@ -10,56 +10,71 @@ class RealtimeTest extends StatefulWidget {
 
 class _RealtimeTestState extends State<RealtimeTest> {
   final DatabaseReference _dbRef = FirebaseDatabase.instance.ref();
-  String nombre = '';
-  int edad = 0;
-  String datos = '';
+  int contador = 0;
 
-  void escribirDatos() {
-    _dbRef.child("usuarios/usuario1").set({'nombre': nombre, 'edad': edad});
+  @override
+  void initState() {
+    super.initState();
+
+    // Escuchar en tiempo real el cambio en "sala/personas"
+    _dbRef.child("sala/personas").onValue.listen((event) {
+      final data = event.snapshot.value;
+      if (data != null && mounted) {
+        setState(() {
+          contador = int.parse(data.toString());
+        });
+      }
+    });
   }
 
-  void leerDatos() async {
-    final snapshot = await _dbRef.child("usuarios/usuario1").get();
+  void simularEntradaPersona() async {
+    final snapshot = await _dbRef.child("sala/personas").get();
+    int current = 0;
     if (snapshot.exists) {
-      final data = snapshot.value as Map;
-      setState(() {
-        datos = 'Nombre: ${data['nombre']}, Edad: ${data['edad']}';
-      });
-    } else {
-      setState(() {
-        datos = 'No se encontraron datos.';
-      });
+      current = int.parse(snapshot.value.toString());
     }
+
+    final nuevoValor = current + 1;
+    await _dbRef.child("sala").update({'personas': nuevoValor});
+
+    setState(() {
+      contador = nuevoValor;
+    });
+  }
+
+  void resetearContador() async {
+    await _dbRef.child("sala").update({'personas': 0});
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Firebase Realtime Test')),
-      body: Padding(
-        padding: const EdgeInsets.all(20.0),
+      appBar: AppBar(title: const Text('Contador de Personas')),
+      body: Center(
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            TextField(
-              decoration: const InputDecoration(labelText: 'Nombre'),
-              onChanged: (value) => nombre = value,
+            const Text(
+              'Personas dentro de la sala:',
+              style: TextStyle(fontSize: 20),
             ),
-            TextField(
-              decoration: const InputDecoration(labelText: 'Edad'),
-              keyboardType: TextInputType.number,
-              onChanged: (value) => edad = int.tryParse(value) ?? 0,
+            Text(
+              '$contador',
+              style: const TextStyle(fontSize: 50, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: escribirDatos,
-              child: const Text('Guardar en Firebase'),
+            const SizedBox(height: 30),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.door_front_door),
+              label: const Text('Simular Entrada'),
+              onPressed: simularEntradaPersona,
             ),
-            ElevatedButton(
-              onPressed: leerDatos,
-              child: const Text('Leer desde Firebase'),
+            const SizedBox(height: 10),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.refresh),
+              label: const Text('Resetear contador'),
+              onPressed: resetearContador,
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             ),
-            const SizedBox(height: 20),
-            Text(datos, style: const TextStyle(fontSize: 18)),
           ],
         ),
       ),
