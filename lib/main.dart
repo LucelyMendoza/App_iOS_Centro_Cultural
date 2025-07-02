@@ -42,11 +42,7 @@ class MyApp extends StatelessWidget {
         ),
         // Igual aquí, pero ya los delegados los pusimos globalmente arriba
       ),
-<<<<<<< Updated upstream
       home: const RealtimeTest(),
-=======
-      home: const SensorControlView(),
->>>>>>> Stashed changes
     );
   }
 }
