@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 class UbicacionPage extends StatefulWidget {
   const UbicacionPage({super.key});
@@ -15,6 +16,8 @@ class _UbicacionPageState extends State<UbicacionPage> {
   bool isScanning = false;
   Map<DeviceIdentifier, List<int>> historialRssi = {};
   Map<DeviceIdentifier, int> rssiFiltrado = {};
+
+  final DatabaseReference _dbRef = FirebaseDatabase.instance.ref("lecturas");
 
   StreamSubscription? _subscription;
 
@@ -49,6 +52,11 @@ class _UbicacionPageState extends State<UbicacionPage> {
             final uuidStr = _bytesToUuid(uuidBytes);
             if (uuidStr.toLowerCase() == tuUUID.toLowerCase()) {
               actualizarRssiFiltrado(d.device.id, d.rssi);
+              enviarLecturaAFirebase(
+                uuid: uuidStr,
+                deviceId: d.device.id.toString(),
+                rssi: d.rssi,
+              );
             }
           }
         }
@@ -69,6 +77,27 @@ class _UbicacionPageState extends State<UbicacionPage> {
     if (lista.length > ventana) lista.removeAt(0);
     final promedio = lista.reduce((a, b) => a + b) ~/ lista.length;
     rssiFiltrado[id] = promedio;
+  }
+
+  void enviarLecturaAFirebase({
+    required String uuid,
+    required String deviceId,
+    required int rssi,
+  }) {
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+
+    final data = {
+      'uuid': uuid,
+      'deviceId': deviceId,
+      'rssi': rssi,
+      'timestamp': timestamp,
+      // Puedes agregar más si lo necesitas:
+      // 'pos_x': 1.0,
+      // 'pos_y': 2.5,
+      // 'ubicacion': 'aula_301',
+    };
+
+    _dbRef.push().set(data);
   }
 
   String _bytesToUuid(List<int> bytes) {
@@ -96,10 +125,21 @@ class _UbicacionPageState extends State<UbicacionPage> {
             onPressed: isScanning ? null : escanearDispositivos,
             child: Text(isScanning ? 'Escaneando...' : 'Escanear iBeacon'),
           ),
+          ElevatedButton(
+            onPressed: () {
+              enviarLecturaAFirebase(
+                uuid: "prueba-fake-uuid",
+                deviceId: "fake-device-123",
+                rssi: -65,
+              );
+            },
+            child: Text('🔧 Enviar lectura falsa'),
+          ),
+
           const SizedBox(height: 20),
           Center(
             child: Image.asset(
-              'assets/beacon.jpg', // Ruta de tu imagen en assets
+              'assets/beacon.jpg',
               width: MediaQuery.of(context).size.width * 0.9,
               height: MediaQuery.of(context).size.height * 0.4,
               fit: BoxFit.contain,

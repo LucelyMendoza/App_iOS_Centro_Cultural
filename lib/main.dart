@@ -44,7 +44,7 @@ class MyApp extends StatelessWidget {
         ),
         // Igual aquí, pero ya los delegados los pusimos globalmente arriba
       ),
-      home: const RealtimeTest(),
+      home: const Welcome(),
     );
   }
 }
