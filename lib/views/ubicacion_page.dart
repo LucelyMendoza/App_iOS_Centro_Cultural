@@ -108,8 +108,9 @@ class _UbicacionPageState extends State<UbicacionPage> {
   }
 
   double calcularDistancia(int rssi, {int txPower = -59}) {
-    return pow(10, (txPower - rssi) / 20);
-  }
+  return pow(10, (txPower - rssi) / 20).toDouble();
+}
+
 
   Offset trilateracion(
     Offset p1, double d1,

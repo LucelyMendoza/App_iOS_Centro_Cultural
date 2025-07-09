@@ -3,7 +3,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_localizations/flutter_localizations.dart'; // Importante
 import 'package:flutter_platform_widgets/flutter_platform_widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mi_app/views/sensor_control_view.dart';
 import 'package:mi_app/views/welcome.dart';
+import 'package:mi_app/views/realtime_test.dart';
 import 'package:firebase_core/firebase_core.dart';
 
 import '../services/upload_data_service.dart';
@@ -29,10 +31,7 @@ class MyApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
         DefaultWidgetsLocalizations.delegate,
       ],
-      supportedLocales: const [
-        Locale('en', ''),
-        Locale('es', ''),
-      ],
+      supportedLocales: const [Locale('en', ''), Locale('es', '')],
       material: (_, __) => MaterialAppData(
         theme: ThemeData(primarySwatch: Colors.red),
         // Opcional: aquí también puedes agregar localizations si quieres
