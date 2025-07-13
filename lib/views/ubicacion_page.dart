@@ -80,18 +80,26 @@ class BeaconsNotifier extends StateNotifier<Map<DeviceIdentifier, BeaconData>> {
 
 class _UbicacionPageState extends ConsumerState<UbicacionPage> {
   Map<DeviceIdentifier, double> distanciasBeacons = {};
+  Map<DeviceIdentifier, int> rssiActual = {}; // NUEVO: Para mostrar RSSI actual
   double environmentFactor = 2.0;
   static const int TX_POWER = -59;
   final String tuUUID = "b9407f30-f5f8-466e-aff9-25556b57fe6d";
   bool isScanning = false;
+
+  // TIMERS Y SUBSCRIPTIONS
   StreamSubscription? _subscription;
+  StreamSubscription? _firebaseSubscription; // <-- AQUÍ AGREGAR ESTA LÍNEA
   Timer? _updateTimer;
   Timer? _cleanupTimer;
-  Timer? _uiUpdateTimer;
+  Timer? _scanRestartTimer;
 
-  // Reducir la ventana de promedio para respuesta más rápida
+  // Historial más grande para mejor filtrado
   Map<DeviceIdentifier, List<int>> historialRssi = {};
   Map<DeviceIdentifier, int> rssiFiltrado = {};
+
+  // NUEVO: Variables para tracking en tiempo real
+  Map<DeviceIdentifier, DateTime> ultimaActualizacionBeacon = {};
+  Map<DeviceIdentifier, double> distanciaAnterior = {};
 
   final Map<DeviceIdentifier, Offset> coordenadasBeacons = {
     DeviceIdentifier("F5:15:6D:1E:BE:64"): const Offset(0.0, 0.0),
@@ -99,51 +107,219 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
     DeviceIdentifier("EB:01:6C:5F:23:82"): const Offset(2.0, 3.0),
   };
 
+  Map<DeviceIdentifier, Offset> beaconsDetectados = {};
+
   Offset? posicionEstimada;
   DateTime? ultimaActualizacionPosicion;
+
+  void iniciarListenerFirebase() {
+    _firebaseSubscription = FirebaseDatabase.instance
+        .ref('beacons')
+        .onValue
+        .listen((event) {
+          if (event.snapshot.exists) {
+            final data = event.snapshot.value as Map<dynamic, dynamic>;
+            // Procesar datos de Firebase si es necesario
+            print("Datos de Firebase actualizados: ${data.length} beacons");
+          }
+        });
+  }
 
   @override
   void initState() {
     super.initState();
-    // Inicializar distancias
+    inicializarMapas();
+    iniciarProcesoBluetooth();
+    configurarTimers();
+  }
+
+  void inicializarMapas() {
     for (var id in coordenadasBeacons.keys) {
       distanciasBeacons[id] = 0.0;
+      rssiActual[id] = 0;
+      ultimaActualizacionBeacon[id] = DateTime.now();
+      distanciaAnterior[id] = 0.0;
     }
-    iniciarProcesoBluetooth();
+  }
 
-    // Timer para actualización de posición más frecuente
+  void configurarTimers() {
+    // Timer principal para actualización y Firebase
     _updateTimer = Timer.periodic(const Duration(milliseconds: 300), (_) {
       calcularYActualizarPosicion();
+      actualizarUI();
+      enviarDatosAFirebase();
     });
 
     // Timer para limpiar beacons antiguos
     _cleanupTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      ref
-          .read(beaconsProvider.notifier)
-          .removeOldBeacons(const Duration(seconds: 8));
+      limpiarBeaconsAntiguos();
     });
+  }
 
-    // Timer para forzar actualización de UI
-    _uiUpdateTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
-      if (mounted) {
-        setState(() {
-          // Forzar rebuild para mostrar actualizaciones en tiempo real
-        });
+  void enviarDatosAFirebase() {
+    final now = DateTime.now();
+
+    // Enviar datos de cada beacon activo
+    for (final entry in distanciasBeacons.entries) {
+      final id = entry.key;
+      final distancia = entry.value;
+      final rssi = rssiActual[id] ?? 0;
+      final ultimaActualizacion = ultimaActualizacionBeacon[id];
+
+      if (ultimaActualizacion != null &&
+          now.difference(ultimaActualizacion).inSeconds < 8) {
+        _enviarBeaconAFirebase(id, rssi, distancia, now);
       }
-    });
+    }
+
+    // Enviar posición si existe
+    if (posicionEstimada != null) {
+      _enviarPosicionAFirebase(now);
+    }
+  }
+
+  void _enviarPosicionAFirebase(DateTime now) {
+    try {
+      final data = {
+        'x': double.parse(posicionEstimada!.dx.toStringAsFixed(3)),
+        'y': double.parse(posicionEstimada!.dy.toStringAsFixed(3)),
+        'timestamp': now.millisecondsSinceEpoch,
+        'timestampISO': now.toIso8601String(),
+        'beaconsUsados': distanciasBeacons.length,
+        'calidad': distanciasBeacons.length >= 3 ? 'buena' : 'regular',
+        'activo': true,
+      };
+
+      FirebaseDatabase.instance
+          .ref('ubicaciones/usuario1')
+          .set(data)
+          .catchError((error) => print("❌ Error Firebase posición: $error"));
+    } catch (e) {
+      print("❌ Error enviando posición: $e");
+    }
+  }
+
+  void _enviarBeaconAFirebase(
+    DeviceIdentifier id,
+    int rssi,
+    double distancia,
+    DateTime now,
+  ) {
+    try {
+      final beaconId = id.toString().replaceAll(':', '').substring(0, 8);
+      final data = {
+        'rssi': rssi,
+        'distancia': double.parse(distancia.toStringAsFixed(3)),
+        'timestamp': now.millisecondsSinceEpoch,
+        'timestampISO': now.toIso8601String(),
+        'deviceId': id.toString(),
+        'txPower': TX_POWER,
+        'environmentFactor': environmentFactor,
+        'activo': true,
+      };
+
+      FirebaseDatabase.instance
+          .ref('beacons/$beaconId')
+          .set(data)
+          .catchError((error) => print("❌ Error Firebase beacon: $error"));
+    } catch (e) {
+      print("❌ Error enviando beacon: $e");
+    }
+  }
+
+  // FUNCIÓN OPTIMIZADA PARA POSICIÓN
+  void enviarPosicionAFirebaseOptimizado(DateTime now) {
+    try {
+      final data = {
+        'x': double.parse(posicionEstimada!.dx.toStringAsFixed(3)),
+        'y': double.parse(posicionEstimada!.dy.toStringAsFixed(3)),
+        'timestamp': now.millisecondsSinceEpoch,
+        'timestampISO': now.toIso8601String(),
+        'beaconsUsados': distanciasBeacons.length,
+        'calidad': distanciasBeacons.length >= 3 ? 'buena' : 'regular',
+        'activo': true,
+      };
+
+      FirebaseDatabase.instance
+          .ref('ubicaciones/usuario1')
+          .set(data)
+          .catchError((error) {
+            print("❌ Error Firebase posición: $error");
+          });
+    } catch (e) {
+      print("❌ Error enviando posición: $e");
+    }
+  }
+
+  void actualizarUI() {
+    if (mounted) {
+      setState(() {
+        // Trigger UI update
+      });
+    }
+  }
+
+  void limpiarBeaconsAntiguos() {
+    final now = DateTime.now();
+    final timeout = const Duration(seconds: 10);
+    final beaconsParaEliminar = <DeviceIdentifier>[];
+
+    for (final entry in ultimaActualizacionBeacon.entries) {
+      if (now.difference(entry.value) > timeout) {
+        beaconsParaEliminar.add(entry.key);
+      }
+    }
+
+    if (beaconsParaEliminar.isNotEmpty) {
+      setState(() {
+        for (final id in beaconsParaEliminar) {
+          distanciasBeacons.remove(id);
+          rssiActual.remove(id);
+          ultimaActualizacionBeacon.remove(id);
+          distanciaAnterior.remove(id);
+          historialRssi.remove(id);
+          rssiFiltrado.remove(id);
+        }
+      });
+
+      ref.read(beaconsProvider.notifier).removeOldBeacons(timeout);
+      print("🧹 Limpiados ${beaconsParaEliminar.length} beacons antiguos");
+    }
+  }
+
+  // 7. FUNCIÓN PARA ENVIAR POSICIÓN A FIREBASE
+  void enviarPosicionAFirebase() {
+    if (posicionEstimada != null) {
+      final data = {
+        'x': double.parse(posicionEstimada!.dx.toStringAsFixed(3)),
+        'y': double.parse(posicionEstimada!.dy.toStringAsFixed(3)),
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+        'timestampISO': DateTime.now().toIso8601String(),
+        'beaconsUsados': distanciasBeacons.length,
+        'calidad': distanciasBeacons.length >= 3 ? 'buena' : 'regular',
+      };
+
+      FirebaseDatabase.instance
+          .ref('ubicaciones/usuario1')
+          .set(data)
+          .catchError((error) {
+            print("❌ Error enviando posición a Firebase: $error");
+          });
+    }
   }
 
   Future<void> iniciarProcesoBluetooth() async {
     await solicitarPermisos();
+
     final isSupported = await FlutterBluePlus.isSupported;
     if (!isSupported) {
-      print("Bluetooth no soportado");
+      print("❌ Bluetooth no soportado");
       return;
     }
 
     final isOn = await FlutterBluePlus.isOn;
     if (!isOn) {
-      print("Bluetooth apagado");
+      print("❌ Bluetooth apagado");
       return;
     }
 
@@ -158,7 +334,7 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
     ].request();
 
     if (statuses.values.any((s) => s != PermissionStatus.granted)) {
-      print("Permisos no otorgados");
+      print("⚠️ Permisos no otorgados completamente");
     }
   }
 
@@ -166,11 +342,11 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
     if (isScanning) return;
 
     setState(() => isScanning = true);
+    print("🔍 Iniciando escaneo de beacons...");
 
     try {
-      // Escaneo continuo
       await FlutterBluePlus.startScan(
-        timeout: const Duration(seconds: 30),
+        timeout: const Duration(seconds: 4),
         androidUsesFineLocation: true,
       );
 
@@ -181,75 +357,178 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
           }
         },
         onError: (error) {
-          print("Error en escaneo: $error");
-          if (mounted) {
-            setState(() => isScanning = false);
-            Future.delayed(const Duration(seconds: 2), () {
-              if (mounted) escanearDispositivos();
-            });
-          }
+          print("❌ Error en escaneo: $error");
+          _reiniciarEscaneo();
         },
       );
 
       _subscription?.onDone(() {
-        if (mounted) {
-          setState(() => isScanning = false);
-          Future.delayed(const Duration(milliseconds: 500), () {
-            if (mounted) escanearDispositivos();
-          });
-        }
+        print("🔄 Escaneo completado, reiniciando...");
+        _reiniciarEscaneo();
       });
     } catch (e) {
-      print("Error iniciando escaneo: $e");
-      if (mounted) {
-        setState(() => isScanning = false);
-      }
+      print("❌ Error iniciando escaneo: $e");
+      _reiniciarEscaneo();
+    }
+  }
+
+  void _reiniciarEscaneo() {
+    if (mounted) {
+      setState(() => isScanning = false);
+
+      // Cancelar timer anterior si existe
+      _scanRestartTimer?.cancel();
+
+      // Reiniciar después de un breve delay
+      _scanRestartTimer = Timer(const Duration(milliseconds: 200), () {
+        if (mounted) escanearDispositivos();
+      });
     }
   }
 
   void procesarResultadoEscaneo(ScanResult result) {
     final data = result.advertisementData.manufacturerData;
-    if (data.isNotEmpty && data.values.first.length >= 23) {
-      final uuidStr = _bytesToUuid(data.values.first.sublist(2, 18));
-      if (uuidStr.toLowerCase() == tuUUID.toLowerCase()) {
-        final id = result.device.id;
-        final nuevoRssi = result.rssi;
 
-        // Actualizar el historial de RSSI con ventana más pequeña
-        final lista = historialRssi.putIfAbsent(id, () => []);
-        lista.add(nuevoRssi);
-        if (lista.length > 2) lista.removeAt(0); // Ventana más pequeña
+    // Verificar si es un beacon válido
+    if (data.isEmpty || data.values.first.length < 23) {
+      return;
+    }
 
-        // Calcular promedio simple para mayor responsividad
-        final promedio = lista.reduce((a, b) => a + b) ~/ lista.length;
-        final nuevaDistancia = calcularDistancia(promedio);
+    final uuidStr = _bytesToUuid(data.values.first.sublist(2, 18));
 
-        // Actualizar provider y estado local inmediatamente
-        ref
-            .read(beaconsProvider.notifier)
-            .updateBeacon(id, promedio, nuevaDistancia);
+    // Verificar UUID
+    if (uuidStr.toLowerCase() != tuUUID.toLowerCase()) {
+      return;
+    }
 
-        setState(() {
-          rssiFiltrado[id] = promedio;
-          distanciasBeacons[id] = nuevaDistancia;
-        });
+    final id = result.device.id;
+    final nuevoRssi = result.rssi;
 
-        // Enviar cada beacon individual a Firebase en tiempo real
-        enviarBeaconAFirebase(id, promedio, nuevaDistancia);
-      }
+    // PERMITIR BEACONS DINÁMICOS
+    if (!coordenadasBeacons.containsKey(id)) {
+      print("🆕 Nuevo beacon detectado: ${id.toString().substring(0, 17)}");
+
+      // Asignar coordenadas temporales (se pueden ajustar dinámicamente)
+      beaconsDetectados[id] = Offset(
+        Random().nextDouble() * 5.0,
+        Random().nextDouble() * 4.0,
+      );
+
+      // Inicializar en mapas
+      distanciasBeacons[id] = 0.0;
+      rssiActual[id] = 0;
+      ultimaActualizacionBeacon[id] = DateTime.now();
+      distanciaAnterior[id] = 0.0;
+    }
+
+    print(
+      "📡 Beacon: ${id.toString().substring(0, 17)} - RSSI: $nuevoRssi dBm",
+    );
+
+    // Filtrado mejorado de RSSI
+    final lista = historialRssi.putIfAbsent(id, () => []);
+    lista.add(nuevoRssi);
+    if (lista.length > 10) lista.removeAt(0);
+
+    // Calcular RSSI filtrado con promedio móvil ponderado
+    int promedioRssi = _calcularRSSIFiltrado(lista);
+    final nuevaDistancia = calcularDistancia(promedioRssi);
+    final distanciaPrevia = distanciasBeacons[id] ?? 0.0;
+
+    // Actualizar estados
+    setState(() {
+      rssiFiltrado[id] = promedioRssi;
+      rssiActual[id] = promedioRssi;
+      distanciasBeacons[id] = nuevaDistancia;
+      ultimaActualizacionBeacon[id] = DateTime.now();
+      distanciaAnterior[id] = distanciaPrevia;
+    });
+
+    // Actualizar provider
+    ref
+        .read(beaconsProvider.notifier)
+        .updateBeacon(id, promedioRssi, nuevaDistancia);
+
+    print("📏 Distancia: ${nuevaDistancia.toStringAsFixed(3)}m");
+  }
+
+  int _calcularRSSIFiltrado(List<int> lista) {
+    if (lista.isEmpty) return 0;
+    if (lista.length == 1) return lista[0];
+
+    // Promedio móvil ponderado - valores más recientes tienen más peso
+    int suma = 0;
+    int pesos = 0;
+    for (int i = 0; i < lista.length; i++) {
+      int peso = i + 1;
+      suma += lista[i] * peso;
+      pesos += peso;
+    }
+    return suma ~/ pesos;
+  }
+
+  void enviarBeaconAFirebaseInmediato(
+    DeviceIdentifier id,
+    int rssi,
+    double distancia,
+  ) async {
+    try {
+      final beaconId = id.toString().replaceAll(':', '').substring(0, 8);
+      final now = DateTime.now();
+
+      final data = {
+        'rssi': rssi,
+        'distancia': double.parse(distancia.toStringAsFixed(3)),
+        'timestamp': now.millisecondsSinceEpoch,
+        'timestampISO': now.toIso8601String(),
+        'deviceId': id.toString(),
+        'txPower': TX_POWER,
+        'environmentFactor': environmentFactor,
+      };
+
+      // Enviar a Firebase SIN await para no bloquear
+      FirebaseDatabase.instance
+          .ref('beacons/$beaconId')
+          .set(data)
+          .then((_) {
+            print(
+              "✅ Firebase actualizado - Beacon $beaconId: ${distancia.toStringAsFixed(3)}m, RSSI: $rssi dBm",
+            );
+          })
+          .catchError((error) {
+            print("❌ Error Firebase: $error");
+          });
+    } catch (e) {
+      print("❌ Error enviando a Firebase: $e");
     }
   }
 
   void calcularYActualizarPosicion() {
-    if (rssiFiltrado.length >= 3) {
-      final beaconsUsados = rssiFiltrado.entries.take(3).toList();
-      final posiciones = beaconsUsados
-          .map((e) => coordenadasBeacons[e.key])
-          .whereType<Offset>()
-          .toList();
-      final distancias = beaconsUsados
-          .map((e) => distanciasBeacons[e.key] ?? 0.0)
-          .toList();
+    final beaconsActivos = <DeviceIdentifier, double>{};
+    final now = DateTime.now();
+
+    // Filtrar beacons activos
+    for (final entry in distanciasBeacons.entries) {
+      final ultimaActualizacion = ultimaActualizacionBeacon[entry.key];
+      if (ultimaActualizacion != null &&
+          now.difference(ultimaActualizacion).inSeconds < 8) {
+        beaconsActivos[entry.key] = entry.value;
+      }
+    }
+
+    if (beaconsActivos.length >= 3) {
+      final beaconsParaCalculo = beaconsActivos.entries.take(3).toList();
+      final posiciones = <Offset>[];
+      final distancias = <double>[];
+
+      for (final entry in beaconsParaCalculo) {
+        final coordenada =
+            coordenadasBeacons[entry.key] ?? beaconsDetectados[entry.key];
+        if (coordenada != null) {
+          posiciones.add(coordenada);
+          distancias.add(entry.value);
+        }
+      }
 
       if (posiciones.length == 3) {
         final nuevaPos = trilateracion(
@@ -261,13 +540,10 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
           distancias[2],
         );
 
-        // Actualizar posición siempre para tiempo real
         setState(() {
           posicionEstimada = nuevaPos;
           ultimaActualizacionPosicion = DateTime.now();
         });
-
-        enviarUbicacionAFirebase(nuevaPos.dx, nuevaPos.dy);
       }
     }
   }
@@ -275,11 +551,17 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
   double calcularDistancia(int rssi, {int txPower = TX_POWER}) {
     if (rssi == 0) return -1.0;
 
-    // Fórmula mejorada para mejor precisión
-    final exponente = (txPower - rssi) / (10 * environmentFactor);
-    final distancia = pow(10, exponente).toDouble();
+    // Fórmula logarítmica mejorada
+    final ratio = (txPower - rssi) / (10.0 * environmentFactor);
+    double distancia = pow(10, ratio).toDouble();
 
-    // Aplicar límites razonables
+    // Aplicar corrección empírica
+    if (distancia < 1.0) {
+      distancia = distancia * 0.8;
+    } else if (distancia > 10.0) {
+      distancia = distancia * 1.2;
+    }
+
     return distancia.clamp(0.1, 50.0);
   }
 
@@ -291,34 +573,43 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
     Offset p3,
     double d3,
   ) {
-    final A = 2 * (p2.dx - p1.dx);
-    final B = 2 * (p2.dy - p1.dy);
-    final C =
-        pow(d1, 2) -
-        pow(d2, 2) -
-        pow(p1.dx, 2) +
-        pow(p2.dx, 2) -
-        pow(p1.dy, 2) +
-        pow(p2.dy, 2);
-    final D = 2 * (p3.dx - p2.dx);
-    final E = 2 * (p3.dy - p2.dy);
-    final F =
-        pow(d2, 2) -
-        pow(d3, 2) -
-        pow(p2.dx, 2) +
-        pow(p3.dx, 2) -
-        pow(p2.dy, 2) +
-        pow(p3.dy, 2);
+    try {
+      final A = 2 * (p2.dx - p1.dx);
+      final B = 2 * (p2.dy - p1.dy);
+      final C =
+          pow(d1, 2) -
+          pow(d2, 2) -
+          pow(p1.dx, 2) +
+          pow(p2.dx, 2) -
+          pow(p1.dy, 2) +
+          pow(p2.dy, 2);
+      final D = 2 * (p3.dx - p2.dx);
+      final E = 2 * (p3.dy - p2.dy);
+      final F =
+          pow(d2, 2) -
+          pow(d3, 2) -
+          pow(p2.dx, 2) +
+          pow(p3.dx, 2) -
+          pow(p2.dy, 2) +
+          pow(p3.dy, 2);
 
-    final denominador = (E * A - B * D);
-    if (denominador.abs() < 0.0001) {
+      final denominador = (E * A - B * D);
+      if (denominador.abs() < 0.001) {
+        return posicionEstimada ?? const Offset(2.0, 1.5);
+      }
+
+      final x = (C * E - F * B) / denominador;
+      final y = (A * F - C * D) / denominador;
+
+      final resultado = Offset(x.toDouble(), y.toDouble());
+      final xLimitado = resultado.dx.clamp(-1.0, 6.0);
+      final yLimitado = resultado.dy.clamp(-1.0, 5.0);
+
+      return Offset(xLimitado, yLimitado);
+    } catch (e) {
+      print("❌ Error en trilateración: $e");
       return posicionEstimada ?? const Offset(2.0, 1.5);
     }
-
-    final x = (C * E - F * B) / denominador;
-    final y = (C * D - A * F) / (B * D - A * E);
-
-    return Offset(x.toDouble(), y.toDouble());
   }
 
   // Enviar cada beacon individual a Firebase
@@ -329,11 +620,22 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
   ) async {
     try {
       final beaconId = id.toString().replaceAll(':', '').substring(0, 8);
+      final now = DateTime.now();
+
+      // Enviar con timestamp más preciso
       await FirebaseDatabase.instance.ref('beacons/$beaconId').set({
         'rssi': rssi,
-        'distancia': distancia,
-        'timestamp': DateTime.now().toIso8601String(),
+        'distancia': double.parse(
+          distancia.toStringAsFixed(3),
+        ), // Precisión de 3 decimales
+        'timestamp': now.millisecondsSinceEpoch,
+        'timestampISO': now.toIso8601String(),
+        'deviceId': id.toString(),
       });
+
+      print(
+        "Beacon $beaconId: ${distancia.toStringAsFixed(3)}m, RSSI: $rssi dBm",
+      );
     } catch (e) {
       print("Error enviando beacon a Firebase: $e");
     }
@@ -359,9 +661,10 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
   @override
   void dispose() {
     _subscription?.cancel();
+    _firebaseSubscription?.cancel();
     _updateTimer?.cancel();
     _cleanupTimer?.cancel();
-    _uiUpdateTimer?.cancel();
+    _scanRestartTimer?.cancel();
     FlutterBluePlus.stopScan();
     super.dispose();
   }
@@ -369,15 +672,24 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
   @override
   Widget build(BuildContext context) {
     final beaconsData = ref.watch(beaconsProvider);
+    final beaconsActivos = beaconsData.values
+        .where(
+          (beacon) =>
+              DateTime.now().difference(beacon.ultimaActualizacion).inSeconds <
+              8,
+        )
+        .length;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Ubicación - iBeacon'),
+        title: Text(
+          'Ubicación - $beaconsActivos/${beaconsData.length} Beacons',
+        ),
         backgroundColor: isScanning ? Colors.green : Colors.red,
         actions: [
           IconButton(
             icon: Icon(
-              isScanning ? Icons.bluetooth_searching : Icons.bluetooth,
+              isScanning ? Icons.bluetooth_searching : Icons.bluetooth_disabled,
               color: Colors.white,
             ),
             onPressed: isScanning ? null : escanearDispositivos,
@@ -386,9 +698,8 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
       ),
       body: Column(
         children: [
-          // Indicador de estado mejorado
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
+          // Indicador de estado
+          Container(
             width: double.infinity,
             padding: const EdgeInsets.all(12.0),
             color: isScanning ? Colors.green.shade100 : Colors.red.shade100,
@@ -399,103 +710,63 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
                   const SizedBox(
                     width: 20,
                     height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
-                    ),
+                    child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 else
-                  Icon(Icons.bluetooth_disabled, color: Colors.red),
+                  const Icon(Icons.bluetooth_disabled, color: Colors.red),
                 const SizedBox(width: 12),
                 Text(
                   isScanning
-                      ? 'Escaneando beacons en tiempo real...'
+                      ? 'Escaneando... $beaconsActivos beacons activos'
                       : 'Escaneo detenido',
                   style: TextStyle(
                     color: isScanning
                         ? Colors.green.shade800
                         : Colors.red.shade800,
                     fontWeight: FontWeight.bold,
-                    fontSize: 16,
                   ),
                 ),
               ],
             ),
           ),
 
-          // Información de posición mejorada
+          // Información de posición
           if (posicionEstimada != null)
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
+            Container(
               padding: const EdgeInsets.all(16.0),
+              margin: const EdgeInsets.all(8.0),
               decoration: BoxDecoration(
                 color: Colors.blue.shade50,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: Colors.blue.shade200),
               ),
-              margin: const EdgeInsets.all(8.0),
               child: Column(
                 children: [
                   Text(
-                    '📍 Posición estimada:',
+                    '📍 Posición Estimada',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
+                      color: Colors.blue.shade800,
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'X: ${posicionEstimada!.dx.toStringAsFixed(3)}m, Y: ${posicionEstimada!.dy.toStringAsFixed(3)}m',
+                    'X: ${posicionEstimada!.dx.toStringAsFixed(3)}m\nY: ${posicionEstimada!.dy.toStringAsFixed(3)}m',
+                    textAlign: TextAlign.center,
                     style: const TextStyle(
-                      fontSize: 20,
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
                       color: Colors.blue,
                     ),
                   ),
-                  if (ultimaActualizacionPosicion != null)
-                    Text(
-                      'Actualizado: ${DateTime.now().difference(ultimaActualizacionPosicion!).inMilliseconds}ms ago',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Última actualización: ${ultimaActualizacionPosicion != null ? "${DateTime.now().difference(ultimaActualizacionPosicion!).inMilliseconds}ms" : "nunca"}',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                  ),
                 ],
               ),
             ),
-
-          // Contador de beacons con animación
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            padding: const EdgeInsets.all(12.0),
-            margin: const EdgeInsets.symmetric(horizontal: 16.0),
-            decoration: BoxDecoration(
-              color: beaconsData.length >= 3
-                  ? Colors.green.shade50
-                  : Colors.orange.shade50,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: beaconsData.length >= 3 ? Colors.green : Colors.orange,
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  beaconsData.length >= 3 ? Icons.check_circle : Icons.warning,
-                  color: beaconsData.length >= 3 ? Colors.green : Colors.orange,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Beacons detectados: ${beaconsData.length}/3',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: beaconsData.length >= 3
-                        ? Colors.green.shade800
-                        : Colors.orange.shade800,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 10),
 
           // Mapa visual
           Expanded(
@@ -508,7 +779,10 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
               ),
               child: CustomPaint(
                 painter: MapaBeaconsPainter(
-                  coordenadasBeacons: coordenadasBeacons,
+                  coordenadasBeacons: {
+                    ...coordenadasBeacons,
+                    ...beaconsDetectados,
+                  },
                   posicionEstimada: posicionEstimada,
                   beaconsData: beaconsData,
                   config: BeaconConfig(
@@ -521,7 +795,7 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
             ),
           ),
 
-          // Lista de beacons con información en tiempo real
+          // Lista de beacons
           Expanded(
             flex: 1,
             child: ListView.builder(
@@ -529,119 +803,133 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
               itemBuilder: (context, index) {
                 final entry = beaconsData.entries.elementAt(index);
                 final beacon = entry.value;
+                final id = entry.key;
+                final beaconId = id.toString().substring(0, 17);
+
                 final age = DateTime.now().difference(
                   beacon.ultimaActualizacion,
                 );
-                final beaconId = entry.key.toString().substring(0, 17);
+                final isActive = age.inSeconds < 8;
 
-                // Determinar estado de conexión
-                final isActive = age.inSeconds < 5;
-                final signalStrength = beacon.rssi > -70
-                    ? 'Excelente'
-                    : beacon.rssi > -80
-                    ? 'Buena'
-                    : beacon.rssi > -90
-                    ? 'Débil'
-                    : 'Muy débil';
+                final distanciaActual = distanciasBeacons[id] ?? 0.0;
+                final rssiActualValue = rssiActual[id] ?? beacon.rssi;
+                final distanciaPrevia = distanciaAnterior[id] ?? 0.0;
+                final cambioDistancia = distanciaActual - distanciaPrevia;
 
-                return AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
+                String movimiento = "";
+                Color colorMovimiento = Colors.grey;
+                if (cambioDistancia.abs() > 0.1) {
+                  if (cambioDistancia > 0) {
+                    movimiento = "↗️ Alejándose";
+                    colorMovimiento = Colors.red;
+                  } else {
+                    movimiento = "↘️ Acercándose";
+                    colorMovimiento = Colors.green;
+                  }
+                } else {
+                  movimiento = "➡️ Estable";
+                  colorMovimiento = Colors.blue;
+                }
+
+                return Card(
                   margin: const EdgeInsets.symmetric(
                     horizontal: 8,
                     vertical: 4,
                   ),
-                  child: Card(
-                    elevation: isActive ? 4 : 1,
-                    color: isActive ? Colors.white : Colors.grey.shade100,
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: isActive ? Colors.green : Colors.grey,
-                        child: Text(
-                          '${beacon.distancia.toStringAsFixed(1)}m',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      title: Text(
-                        'Beacon ${beaconId}',
-                        style: TextStyle(
+                  elevation: isActive ? 4 : 1,
+                  color: isActive ? Colors.white : Colors.grey.shade100,
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: isActive ? Colors.green : Colors.grey,
+                      child: Text(
+                        '${distanciaActual.toStringAsFixed(1)}m',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
                           fontWeight: FontWeight.bold,
-                          color: isActive ? Colors.black : Colors.grey,
                         ),
                       ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.signal_cellular_alt,
-                                size: 16,
-                                color: beacon.rssi > -70
-                                    ? Colors.green
-                                    : beacon.rssi > -80
-                                    ? Colors.orange
-                                    : Colors.red,
-                              ),
-                              const SizedBox(width: 4),
-                              Text('${beacon.rssi} dBm ($signalStrength)'),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.straighten,
-                                size: 16,
-                                color: Colors.blue,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${beacon.distancia.toStringAsFixed(2)} metros',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.blue,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Actualizado: ${age.inMilliseconds}ms ago',
-                            style: TextStyle(
-                              color: isActive ? Colors.green : Colors.red,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
+                    ),
+                    title: Text(
+                      'Beacon ${beaconId}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: isActive ? Colors.black : Colors.grey,
                       ),
-                      trailing: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: isActive ? Colors.green : Colors.grey,
-                              borderRadius: BorderRadius.circular(4),
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.signal_cellular_alt,
+                              size: 14,
+                              color: Colors.blue,
                             ),
-                            child: Text(
-                              isActive ? 'ACTIVO' : 'INACTIVO',
+                            const SizedBox(width: 4),
+                            Text('RSSI: ${rssiActualValue} dBm'),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.straighten,
+                              size: 14,
+                              color: Colors.orange,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Distancia: ${distanciaActual.toStringAsFixed(3)}m',
                               style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.trending_up,
+                              size: 14,
+                              color: colorMovimiento,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              movimiento,
+                              style: TextStyle(
+                                color: colorMovimiento,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Text(
+                          'Actualizado: ${age.inMilliseconds}ms',
+                          style: TextStyle(
+                            color: isActive ? Colors.green : Colors.red,
+                            fontSize: 11,
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'n=${environmentFactor.toStringAsFixed(1)}',
-                            style: const TextStyle(fontSize: 10),
-                          ),
-                        ],
+                        ),
+                      ],
+                    ),
+                    trailing: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isActive ? Colors.green : Colors.grey,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        isActive ? 'ACTIVO' : 'PERDIDO',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
@@ -679,6 +967,7 @@ class MapaBeaconsPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final paintBeacon = Paint()..color = Colors.blue;
     final paintBeaconInactive = Paint()..color = Colors.grey;
+    final paintBeaconNuevo = Paint()..color = Colors.orange;
     final paintUsuario = Paint()..color = Colors.red;
     final paintDistance = Paint()
       ..color = Colors.green.withOpacity(0.3)
@@ -689,11 +978,10 @@ class MapaBeaconsPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
-
     final scaleX = size.width / 8;
     final scaleY = size.height / 8;
 
-    // Dibujar grid de fondo
+    // Dibujar grid
     final gridPaint = Paint()
       ..color = Colors.grey.shade300
       ..strokeWidth = 1;
