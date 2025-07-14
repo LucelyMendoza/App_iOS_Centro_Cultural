@@ -1,3 +1,4 @@
+// lib/models/gallery.dart
 import 'painting.dart';
 
 class Gallery {
@@ -22,9 +23,9 @@ class Gallery {
   ) {
     return Gallery(
       id: id,
-      title: data['title'],
-      location: data['location'],
-      image: data['image'],
+      title: data['title'] ?? '',
+      location: data['location'] ?? '',
+      image: data['image'] ?? '',
       paintings: paintings,
     );
   }

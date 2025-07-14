@@ -5,6 +5,9 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../services/hybrid_localization_service.dart';
+import '../models/point3d.dart';
+import '../models/painting.dart';
 
 class UbicacionPage extends ConsumerStatefulWidget {
   const UbicacionPage({super.key});
@@ -85,6 +88,9 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
   static const int TX_POWER = -59;
   final String tuUUID = "b9407f30-f5f8-466e-aff9-25556b57fe6d";
   bool isScanning = false;
+  late HybridLocalizationService _hybridService;
+  Point3D? posicion3D;
+  List<Painting> paintingsNearby = [];
 
   // TIMERS Y SUBSCRIPTIONS
   StreamSubscription? _subscription;
@@ -105,6 +111,7 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
     DeviceIdentifier("F5:15:6D:1E:BE:64"): const Offset(0.0, 0.0),
     DeviceIdentifier("C8:FC:FC:6D:94:75"): const Offset(4.0, 0.0),
     DeviceIdentifier("EB:01:6C:5F:23:82"): const Offset(2.0, 3.0),
+    DeviceIdentifier("C1:8E:5A:07:E1:85"): const Offset(2.0, 3.0),
   };
 
   Map<DeviceIdentifier, Offset> beaconsDetectados = {};
@@ -128,6 +135,7 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
   @override
   void initState() {
     super.initState();
+    _initializeHybridService();
     inicializarMapas();
     iniciarProcesoBluetooth();
     configurarTimers();
@@ -142,39 +150,79 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
     }
   }
 
+  void _initializeHybridService() {
+    final beaconPositions3D = {
+      "F5:15:6D:1E:BE:64": Point3D(x: 0.0, y: 0.0, z: 2.0),
+      "C8:FC:FC:6D:94:75": Point3D(x: 4.0, y: 0.0, z: 2.0),
+      "EB:01:6C:5F:23:82": Point3D(x: 2.0, y: 3.0, z: 2.0),
+    };
+
+    _hybridService = HybridLocalizationService(
+      beaconPositions: beaconPositions3D,
+    );
+    _hybridService.buildFingerprintDatabase();
+  }
+
   void configurarTimers() {
-    // Timer principal para actualización y Firebase
-    _updateTimer = Timer.periodic(const Duration(milliseconds: 300), (_) {
+    // Timer principal - AUMENTAR intervalo para reducir carga
+    _updateTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      // Era 300ms, ahora 1 segundo
       calcularYActualizarPosicion();
       actualizarUI();
-      enviarDatosAFirebase();
+      // SEPARAR el envío a Firebase para reducir llamadas
+      if (DateTime.now().millisecondsSinceEpoch % 3000 < 1000) {
+        // Cada 3 segundos
+        enviarDatosAFirebase();
+      }
     });
 
-    // Timer para limpiar beacons antiguos
-    _cleanupTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    // Timer para limpiar beacons antiguos - AUMENTAR intervalo
+    _cleanupTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      // Era 5 segundos, ahora 10
       limpiarBeaconsAntiguos();
     });
   }
 
   void enviarDatosAFirebase() {
-    final now = DateTime.now();
+    try {
+      final now = DateTime.now();
 
-    // Enviar datos de cada beacon activo
-    for (final entry in distanciasBeacons.entries) {
-      final id = entry.key;
-      final distancia = entry.value;
-      final rssi = rssiActual[id] ?? 0;
-      final ultimaActualizacion = ultimaActualizacionBeacon[id];
+      // Usar batch updates para reducir llamadas a Firebase
+      final batchUpdate = <String, dynamic>{};
 
-      if (ultimaActualizacion != null &&
-          now.difference(ultimaActualizacion).inSeconds < 8) {
-        _enviarBeaconAFirebase(id, rssi, distancia, now);
+      for (final entry in distanciasBeacons.entries) {
+        final id = entry.key;
+        final ultimaActualizacion = ultimaActualizacionBeacon[id];
+
+        if (ultimaActualizacion != null &&
+            now.difference(ultimaActualizacion).inSeconds < 5) {
+          final beaconId = id.toString().replaceAll(':', '').substring(0, 8);
+          batchUpdate['beacons/$beaconId'] = {
+            'rssi': rssiActual[id] ?? 0,
+            'distancia': double.parse(entry.value.toStringAsFixed(3)),
+            'timestamp': now.millisecondsSinceEpoch,
+            'timestampISO': now.toIso8601String(),
+            'deviceId': id.toString(),
+            'txPower': TX_POWER,
+            'environmentFactor': environmentFactor,
+            'activo': true,
+          };
+        }
       }
-    }
 
-    // Enviar posición si existe
-    if (posicionEstimada != null) {
-      _enviarPosicionAFirebase(now);
+      // Enviar todos los updates en una sola operación
+      if (batchUpdate.isNotEmpty) {
+        FirebaseDatabase.instance.ref().update(batchUpdate).catchError((error) {
+          print("❌ Error en batch update: $error");
+        });
+      }
+
+      // Enviar posición si existe
+      if (posicionEstimada != null) {
+        _enviarPosicionAFirebase(now);
+      }
+    } catch (e) {
+      print("❌ Error crítico en enviarDatosAFirebase: $e");
     }
   }
 
@@ -261,7 +309,7 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
 
   void limpiarBeaconsAntiguos() {
     final now = DateTime.now();
-    final timeout = const Duration(seconds: 10);
+    final timeout = const Duration(seconds: 10); // Aumentar de 5 a 10 segundos
     final beaconsParaEliminar = <DeviceIdentifier>[];
 
     for (final entry in ultimaActualizacionBeacon.entries) {
@@ -273,6 +321,7 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
     if (beaconsParaEliminar.isNotEmpty) {
       setState(() {
         for (final id in beaconsParaEliminar) {
+          _marcarBeaconComoInactivo(id);
           distanciasBeacons.remove(id);
           rssiActual.remove(id);
           ultimaActualizacionBeacon.remove(id);
@@ -283,7 +332,17 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
       });
 
       ref.read(beaconsProvider.notifier).removeOldBeacons(timeout);
-      print("🧹 Limpiados ${beaconsParaEliminar.length} beacons antiguos");
+    }
+  }
+
+  void _marcarBeaconComoInactivo(DeviceIdentifier id) async {
+    try {
+      final beaconId = id.toString().replaceAll(':', '').substring(0, 8);
+      await FirebaseDatabase.instance
+          .ref('beacons/$beaconId/activo')
+          .set(false);
+    } catch (e) {
+      print("❌ Error marcando beacon como inactivo: $e");
     }
   }
 
@@ -342,14 +401,19 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
     if (isScanning) return;
 
     setState(() => isScanning = true);
-    print("🔍 Iniciando escaneo de beacons...");
 
     try {
+      await FlutterBluePlus.stopScan();
+
+      // CONFIGURACIÓN MÁS ESTABLE
       await FlutterBluePlus.startScan(
-        timeout: const Duration(seconds: 4),
+        timeout: const Duration(seconds: 60), // Aumentar timeout
         androidUsesFineLocation: true,
+        continuousUpdates: true,
+        continuousDivisor: 2, // Reducir frecuencia para mayor estabilidad
       );
 
+      _subscription?.cancel();
       _subscription = FlutterBluePlus.scanResults.listen(
         (results) {
           for (var result in results) {
@@ -358,17 +422,15 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
         },
         onError: (error) {
           print("❌ Error en escaneo: $error");
-          _reiniciarEscaneo();
+          // REINICIO MÁS SUAVE
+          Future.delayed(const Duration(seconds: 2), () {
+            if (mounted) _reiniciarEscaneo();
+          });
         },
       );
-
-      _subscription?.onDone(() {
-        print("🔄 Escaneo completado, reiniciando...");
-        _reiniciarEscaneo();
-      });
     } catch (e) {
       print("❌ Error iniciando escaneo: $e");
-      _reiniciarEscaneo();
+      setState(() => isScanning = false);
     }
   }
 
@@ -454,17 +516,14 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
 
   int _calcularRSSIFiltrado(List<int> lista) {
     if (lista.isEmpty) return 0;
-    if (lista.length == 1) return lista[0];
 
-    // Promedio móvil ponderado - valores más recientes tienen más peso
-    int suma = 0;
-    int pesos = 0;
-    for (int i = 0; i < lista.length; i++) {
-      int peso = i + 1;
-      suma += lista[i] * peso;
-      pesos += peso;
-    }
-    return suma ~/ pesos;
+    // Usar solo los últimos 3 valores para mayor reactividad
+    final ultimosValores = lista.length > 3
+        ? lista.sublist(lista.length - 3)
+        : lista;
+
+    // Promedio simple de los últimos valores
+    return (ultimosValores.reduce((a, b) => a + b) ~/ ultimosValores.length);
   }
 
   void enviarBeaconAFirebaseInmediato(
@@ -504,47 +563,69 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
   }
 
   void calcularYActualizarPosicion() {
-    final beaconsActivos = <DeviceIdentifier, double>{};
     final now = DateTime.now();
+    final beaconsActivos = <String, double>{};
+    final rssiActivos = <String, int>{};
 
-    // Filtrar beacons activos
     for (final entry in distanciasBeacons.entries) {
+      final id = entry.key.toString();
       final ultimaActualizacion = ultimaActualizacionBeacon[entry.key];
+
+      // CAMBIAR timeout de 2 a 5 segundos para mayor estabilidad
       if (ultimaActualizacion != null &&
-          now.difference(ultimaActualizacion).inSeconds < 8) {
-        beaconsActivos[entry.key] = entry.value;
+          now.difference(ultimaActualizacion).inSeconds < 5) {
+        beaconsActivos[id] = entry.value;
+        rssiActivos[id] = rssiActual[entry.key] ?? 0;
       }
     }
 
-    if (beaconsActivos.length >= 3) {
-      final beaconsParaCalculo = beaconsActivos.entries.take(3).toList();
-      final posiciones = <Offset>[];
-      final distancias = <double>[];
+    // CAMBIAR de 3 a 2 beacons mínimos para funcionar
+    if (beaconsActivos.length >= 2) {
+      posicion3D = _hybridService.hybridLocalization(
+        beaconsActivos,
+        rssiActivos,
+      );
 
-      for (final entry in beaconsParaCalculo) {
-        final coordenada =
-            coordenadasBeacons[entry.key] ?? beaconsDetectados[entry.key];
-        if (coordenada != null) {
-          posiciones.add(coordenada);
-          distancias.add(entry.value);
-        }
-      }
+      if (posicion3D != null) {
+        posicionEstimada = Offset(posicion3D!.x, posicion3D!.y);
 
-      if (posiciones.length == 3) {
-        final nuevaPos = trilateracion(
-          posiciones[0],
-          distancias[0],
-          posiciones[1],
-          distancias[1],
-          posiciones[2],
-          distancias[2],
+        // BUSCAR PINTURAS CERCANAS
+        paintingsNearby = _hybridService.getNearbyPaintings(
+          posicion3D!,
+          radius: 2.0, // Aumentar radio de detección
         );
 
-        setState(() {
-          posicionEstimada = nuevaPos;
-          ultimaActualizacionPosicion = DateTime.now();
-        });
+        if (mounted) {
+          setState(() {
+            ultimaActualizacionPosicion = DateTime.now();
+          });
+        }
       }
+    }
+  }
+
+  void _enviarPosicion3DAFirebase(DateTime now) {
+    if (posicion3D == null) return;
+
+    try {
+      final data = {
+        'x': double.parse(posicion3D!.x.toStringAsFixed(3)),
+        'y': double.parse(posicion3D!.y.toStringAsFixed(3)),
+        'z': double.parse(posicion3D!.z.toStringAsFixed(3)),
+        'timestamp': now.millisecondsSinceEpoch,
+        'timestampISO': now.toIso8601String(),
+        'beaconsUsados': distanciasBeacons.length,
+        'calidad': distanciasBeacons.length >= 3 ? 'buena' : 'regular',
+        'paintingsNearby': paintingsNearby.map((p) => p.title).toList(),
+        'activo': true,
+      };
+
+      FirebaseDatabase.instance
+          .ref('ubicaciones/usuario1')
+          .set(data)
+          .catchError((error) => print("❌ Error Firebase posición 3D: $error"));
+    } catch (e) {
+      print("❌ Error enviando posición 3D: $e");
     }
   }
 
@@ -660,12 +741,19 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
 
   @override
   void dispose() {
+    // Cancelar todas las suscripciones y timers de forma ordenada
     _subscription?.cancel();
     _firebaseSubscription?.cancel();
     _updateTimer?.cancel();
     _cleanupTimer?.cancel();
     _scanRestartTimer?.cancel();
-    FlutterBluePlus.stopScan();
+
+    try {
+      FlutterBluePlus.stopScan();
+    } catch (e) {
+      print("⚠️ Error al detener escaneo: $e");
+    }
+
     super.dispose();
   }
 
@@ -676,7 +764,7 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
         .where(
           (beacon) =>
               DateTime.now().difference(beacon.ultimaActualizacion).inSeconds <
-              8,
+              15, // Cambiar de 8 a 15 segundos
         )
         .length;
 
@@ -730,6 +818,80 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
             ),
           ),
 
+          if (paintingsNearby.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.all(16.0),
+              margin: const EdgeInsets.all(8.0),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.shade200),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.palette, color: Colors.orange),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Obras de Arte Cercanas (${paintingsNearby.length})',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.orange.shade800,
+                            ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  ...paintingsNearby.map(
+                    (painting) => Container(
+                      margin: const EdgeInsets.symmetric(vertical: 4.0),
+                      padding: const EdgeInsets.all(8.0),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(6),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.shade300,
+                            blurRadius: 2,
+                            offset: const Offset(0, 1),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.art_track, color: Colors.orange),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  painting.title,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Text(
+                                  '${painting.author} (${painting.year})',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           // Información de posición
           if (posicionEstimada != null)
             Container(
