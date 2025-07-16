@@ -323,7 +323,12 @@ class HybridLocalizationService {
     Map<String, double> beaconDistances,
     Map<String, int> beaconRSSI,
   ) {
-    // Convertir RSSI a double
+    final filteredRSSI = <String, double>{};
+    beaconRSSI.forEach((id, rssi) {
+      // Aquí podrías aplicar otro filtro Kalman para RSSI si es necesario
+      filteredRSSI[id] = rssi.toDouble();
+    });
+
     final rssiDouble = beaconRSSI.map((k, v) => MapEntry(k, v.toDouble()));
 
     // Obtener resultados
