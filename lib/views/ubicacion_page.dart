@@ -94,6 +94,23 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
   List<Painting> nearbyPaintings = [];
   List<Painting> _nearbyPaintings = []; // Usar solo una lista
   String? _lastNotifiedPainting;
+  bool _showFloatingWindow = true;
+
+  bool _alwaysShowNearbyPaintings = true; // ✅ NUEVA VARIABLE
+  List<Painting> _allPaintings = [];
+
+  Point3D? _lastStablePosition;
+  DateTime? _lastStablePositionTime;
+  int _consecutiveEmptyResults = 0;
+  int _consecutiveValidResults = 0;
+  static const int STABILITY_THRESHOLD = 8; // Aumentado de 3 a 8
+  static const int EMPTY_RESULTS_THRESHOLD = 15; // Nuevo umbral para limpieza
+  static const double POSITION_CHANGE_THRESHOLD = 0.2; // Reducido de 0.3 a 0.2
+  static const Duration PAINTING_TIMEOUT = Duration(seconds: 30);
+  List<String> _debugLog = [];
+
+  DateTime? _lastPaintingUpdate;
+  int _stablePositionCount = 0;
 
   // TIMERS Y SUBSCRIPTIONS
   StreamSubscription? _subscription;
@@ -178,16 +195,20 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
   }
 
   void configurarTimers() {
-    _updateTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+    // ✅ MANTENER INTERVALO DE 500ms PERO CON MEJOR LÓGICA
+    _updateTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
       if (_disposed) return;
       calcularYActualizarPosicion();
       actualizarUI();
-      if (DateTime.now().millisecondsSinceEpoch % 3000 < 1000) {
+
+      // ✅ ENVIAR A FIREBASE CADA 2 SEGUNDOS EN LUGAR DE 3
+      if (DateTime.now().millisecondsSinceEpoch % 2000 < 500) {
         enviarDatosAFirebase();
       }
     });
 
-    _cleanupTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+    // ✅ LIMPIAR BEACONS CADA 15 SEGUNDOS EN LUGAR DE 10
+    _cleanupTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (_disposed) return;
       limpiarBeaconsAntiguos();
     });
@@ -505,32 +526,43 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
       final id = entry.key.toString();
       final ultimaActualizacion = ultimaActualizacionBeacon[entry.key];
 
+      // ✅ EXTENDER TIEMPO DE VALIDEZ DE BEACONS
       if (ultimaActualizacion != null &&
-          now.difference(ultimaActualizacion).inSeconds < 3) {
+          now.difference(ultimaActualizacion).inSeconds < 8) {
+        // Era 3, ahora 8
         beaconsActivos[id] = entry.value;
         rssiActivos[id] = rssiActual[entry.key] ?? 0;
       }
     }
 
+    print("🔍 Beacons activos para localización: ${beaconsActivos.length}");
+
     if (beaconsActivos.length >= 2) {
       try {
-        posicion3D = _hybridService.hybridLocalization(
+        final nuevaPosicion3D = _hybridService.hybridLocalization(
           beaconsActivos,
           rssiActivos,
         );
 
-        if (posicion3D != null) {
-          // Actualizar posición
+        if (nuevaPosicion3D != null) {
           posicion3D = Point3D(
-            x: posicion3D!.x.clamp(0.0, 3.0),
-            y: posicion3D!.y.clamp(0.0, 3.0),
+            x: nuevaPosicion3D.x.clamp(0.0, 3.0),
+            y: nuevaPosicion3D.y.clamp(0.0, 3.0),
             z: 1.5,
           );
 
           posicionEstimada = Offset(posicion3D!.x, posicion3D!.y);
 
-          // Actualizar pinturas cercanas
-          _updateNearbyPaintings(posicion3D!);
+          // ✅ RESETEAR CONTADOR DE RESULTADOS VACÍOS CUANDO HAY POSICIÓN VÁLIDA
+          _consecutiveEmptyResults = 0;
+          _consecutiveValidResults++;
+
+          print(
+            "📍 Nueva posición: (${posicion3D!.x.toStringAsFixed(2)}, ${posicion3D!.y.toStringAsFixed(2)})",
+          );
+
+          // ✅ ACTUALIZAR PINTURAS CON LÓGICA MEJORADA
+          _updateNearbyPaintingsStable(posicion3D!);
 
           if (mounted) {
             setState(() {
@@ -541,12 +573,281 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
       } catch (e) {
         print("❌ Error en localización híbrida: $e");
       }
+    } else {
+      print("⚠️ Insuficientes beacons activos (${beaconsActivos.length}/2)");
+
+      // ✅ LÓGICA MEJORADA: NO LIMPIAR INMEDIATAMENTE
+      _consecutiveEmptyResults++;
+      _consecutiveValidResults = 0;
+
+      // ✅ SOLO LIMPIAR DESPUÉS DE MUCHOS RESULTADOS VACÍOS CONSECUTIVOS
+      if (_consecutiveEmptyResults >= EMPTY_RESULTS_THRESHOLD) {
+        final timeSinceLastUpdate = _lastPaintingUpdate != null
+            ? DateTime.now().difference(_lastPaintingUpdate!)
+            : Duration.zero;
+
+        // ✅ LIMPIAR SOLO SI HA PASADO SUFICIENTE TIEMPO
+        if (timeSinceLastUpdate > PAINTING_TIMEOUT &&
+            _nearbyPaintings.isNotEmpty) {
+          setState(() {
+            _nearbyPaintings.clear();
+            _showFloatingWindow = false;
+          });
+          print("🧹 Limpiando pinturas por timeout prolongado");
+          _consecutiveEmptyResults = 0; // Reset counter
+        }
+      }
     }
+  }
+
+  void _updateNearbyPaintingsStable(Point3D userPosition) {
+    _addDebugLog(
+      "Posición actual: (${userPosition.x.toStringAsFixed(2)}, ${userPosition.y.toStringAsFixed(2)})",
+    );
+
+    final newNearby = _hybridService.getNearbyPaintings(userPosition);
+    _addDebugLog("Pinturas encontradas: ${newNearby.length}");
+
+    // ✅ VERIFICAR CAMBIO DE POSICIÓN SIGNIFICATIVO
+    bool significantPositionChange = false;
+    if (_lastStablePosition != null) {
+      final distance = _calculateDistance3D(_lastStablePosition!, userPosition);
+      significantPositionChange = distance > POSITION_CHANGE_THRESHOLD;
+      _addDebugLog(
+        "Distancia desde última posición: ${distance.toStringAsFixed(2)}m",
+      );
+    }
+
+    // ✅ LÓGICA DE ACTUALIZACIÓN MEJORADA
+    if (newNearby.isNotEmpty) {
+      _consecutiveValidResults++;
+      _consecutiveEmptyResults = 0;
+
+      // ✅ ACTUALIZAR SI:
+      // - Hay suficientes resultados válidos consecutivos
+      // - O hay cambio significativo de posición
+      // - O es la primera vez que se detectan pinturas
+      if (_consecutiveValidResults >= STABILITY_THRESHOLD ||
+          significantPositionChange ||
+          _nearbyPaintings.isEmpty) {
+        _applyPaintingUpdateStable(
+          newNearby,
+          userPosition,
+          "Actualización estable: V:$_consecutiveValidResults, Cambio:$significantPositionChange",
+        );
+      }
+    } else {
+      // ✅ SOLO INCREMENTAR CONTADOR, NO LIMPIAR INMEDIATAMENTE
+      _consecutiveEmptyResults++;
+      _consecutiveValidResults = 0;
+      _addDebugLog("Resultado vacío #$_consecutiveEmptyResults");
+    }
+
+    _printDebugLog();
+  }
+
+  void _applyPaintingUpdateStable(
+    List<Painting> newNearby,
+    Point3D userPosition,
+    String reason,
+  ) {
+    // ✅ VERIFICAR CAMBIOS REALES
+    bool hasChanges = _nearbyPaintings.length != newNearby.length;
+
+    if (!hasChanges) {
+      for (int i = 0; i < newNearby.length; i++) {
+        if (newNearby[i].title != _nearbyPaintings[i].title) {
+          hasChanges = true;
+          break;
+        }
+      }
+    }
+
+    if (hasChanges) {
+      _addDebugLog("✅ Aplicando actualización: $reason");
+
+      // ✅ ORDENAR PINTURAS POR DISTANCIA
+      newNearby.sort((a, b) {
+        final distA = a.position?.distanceTo(userPosition) ?? double.infinity;
+        final distB = b.position?.distanceTo(userPosition) ?? double.infinity;
+        return distA.compareTo(distB);
+      });
+
+      if (mounted) {
+        setState(() {
+          _nearbyPaintings = newNearby;
+          _showFloatingWindow = newNearby.isNotEmpty;
+        });
+      }
+
+      // ✅ ACTUALIZAR REFERENCIAS DE ESTABILIDAD
+      _lastStablePosition = userPosition;
+      _lastStablePositionTime = DateTime.now();
+      _lastPaintingUpdate = DateTime.now();
+
+      // ✅ MOSTRAR NOTIFICACIÓN SOLO DE LA PINTURA MÁS CERCANA
+      if (newNearby.isNotEmpty) {
+        final nearestPainting = newNearby.first;
+        final distance =
+            nearestPainting.position?.distanceTo(userPosition) ?? 0;
+
+        _addDebugLog(
+          "🎨 Pintura más cercana: ${nearestPainting.title} (${distance.toStringAsFixed(2)}m)",
+        );
+
+        // ✅ SOLO NOTIFICAR SI ES UNA PINTURA DIFERENTE Y ESTÁ MUY CERCA
+        if (distance <= 1.5 && _lastNotifiedPainting != nearestPainting.title) {
+          _showNearestPaintingNotification(nearestPainting);
+        }
+      }
+    }
+  }
+
+  void _updateNearbyPaintingsConstant(Point3D userPosition) {
+    // Agregar log de debugging
+    _addDebugLog(
+      "Posición actual: (${userPosition.x.toStringAsFixed(2)}, ${userPosition.y.toStringAsFixed(2)})",
+    );
+
+    final newNearby = _hybridService.getNearbyPaintings(userPosition);
+
+    // Verificar si la posición cambió significativamente
+    bool positionChanged = false;
+    if (_lastStablePosition != null) {
+      final distance = _calculateDistance3D(_lastStablePosition!, userPosition);
+      positionChanged = distance > POSITION_CHANGE_THRESHOLD;
+      _addDebugLog(
+        "Distancia desde última posición estable: ${distance.toStringAsFixed(2)}m",
+      );
+    }
+
+    _addDebugLog("Pinturas encontradas: ${newNearby.length}");
+
+    // Aplicar filtros de estabilidad
+    if (newNearby.isEmpty) {
+      _consecutiveEmptyResults++;
+      _consecutiveValidResults = 0;
+      _addDebugLog("Resultado vacío #$_consecutiveEmptyResults");
+
+      // Solo limpiar si hay muchos resultados vacíos consecutivos
+      if (_consecutiveEmptyResults >= STABILITY_THRESHOLD) {
+        _applyPaintingUpdate(
+          [],
+          userPosition,
+          "Limpieza por resultados vacíos estables",
+        );
+      }
+    } else {
+      _consecutiveValidResults++;
+      _consecutiveEmptyResults = 0;
+      _addDebugLog("Resultado válido #$_consecutiveValidResults");
+
+      // Solo actualizar si hay suficientes resultados válidos consecutivos O si la posición cambió
+      if (_consecutiveValidResults >= STABILITY_THRESHOLD || positionChanged) {
+        _applyPaintingUpdate(
+          newNearby,
+          userPosition,
+          "Actualización por estabilidad o cambio de posición",
+        );
+      }
+    }
+
+    // Mostrar log de debugging
+    _printDebugLog();
+  }
+
+  void _applyPaintingUpdate(
+    List<Painting> newNearby,
+    Point3D userPosition,
+    String reason,
+  ) {
+    // Verificar si hay cambios reales
+    bool hayChangios = false;
+
+    if (newNearby.length != _nearbyPaintings.length) {
+      hayChangios = true;
+    } else {
+      for (int i = 0; i < newNearby.length; i++) {
+        if (newNearby[i].title != _nearbyPaintings[i].title) {
+          hayChangios = true;
+          break;
+        }
+      }
+    }
+
+    if (hayChangios) {
+      _addDebugLog("✅ Aplicando actualización: $reason");
+
+      if (mounted) {
+        setState(() {
+          _nearbyPaintings = newNearby;
+          _showFloatingWindow = newNearby.isNotEmpty;
+        });
+      }
+
+      // Actualizar posición estable
+      _lastStablePosition = userPosition;
+      _lastStablePositionTime = DateTime.now();
+
+      // Log de cambios
+      if (newNearby.isNotEmpty) {
+        _addDebugLog("Pinturas actualizadas:");
+        for (var painting in newNearby) {
+          final distance = painting.position?.distanceTo(userPosition) ?? 0;
+          _addDebugLog(
+            "  - ${painting.title} (${distance.toStringAsFixed(2)}m)",
+          );
+        }
+      } else {
+        _addDebugLog("❌ No hay pinturas cercanas");
+      }
+    } else {
+      _addDebugLog("Sin cambios en pinturas");
+    }
+  }
+
+  double _calculateDistance3D(Point3D p1, Point3D p2) {
+    final dx = p1.x - p2.x;
+    final dy = p1.y - p2.y;
+    final dz = p1.z - p2.z;
+    return sqrt(dx * dx + dy * dy + dz * dz);
+  }
+
+  // 5. FUNCIONES DE DEBUGGING
+  void _addDebugLog(String message) {
+    final timestamp = DateTime.now().millisecondsSinceEpoch % 10000;
+    _debugLog.add("[$timestamp] $message");
+    if (_debugLog.length > 20) {
+      _debugLog.removeAt(0);
+    }
+  }
+
+  void _printDebugLog() {
+    if (_debugLog.isNotEmpty) {
+      print("🎨 DEBUG LOG:");
+      // Get the last 5 elements using skip and take
+      final lastElements = _debugLog
+          .skip((_debugLog.length - 5).clamp(0, _debugLog.length))
+          .take(5);
+      for (var log in lastElements) {
+        print("   $log");
+      }
+      _debugLog.clear();
+    }
+  }
+
+  void _closeFloatingWindow() {
+    setState(() {
+      _showFloatingWindow = false;
+    });
   }
 
   void _updateNearbyPaintings(Point3D userPosition) {
     final newNearby = _hybridService.getNearbyPaintings(userPosition);
-
+    print(
+      "Posición usuario: (${userPosition.x}, ${userPosition.y}, ${userPosition.z})",
+    );
+    print("Pinturas cercanas encontradas: ${newNearby.length}");
     if (!_listEquals(newNearby, _nearbyPaintings)) {
       if (mounted) {
         setState(() {
@@ -572,31 +873,59 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
   }
 
   void _showNearestPaintingNotification(Painting painting) {
-    // Evitar notificaciones repetidas para la misma pintura
-    if (_lastNotifiedPainting == painting.title) return;
     _lastNotifiedPainting = painting.title;
 
-    // Usar un diálogo más informativo
+    // ✅ NOTIFICACIÓN MEJORADA
     showDialog(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: true,
       builder: (context) => AlertDialog(
-        title: Text("Pintura cercana detectada"),
+        title: Row(
+          children: [
+            Icon(Icons.palette, color: Colors.orange.shade600),
+            SizedBox(width: 8),
+            Expanded(child: Text("Obra de Arte Cercana")),
+          ],
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(painting.title, style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(
+              painting.title,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: Colors.orange.shade800,
+              ),
+            ),
             SizedBox(height: 8),
-            Text(painting.author),
+            Text("Autor: ${painting.author}", style: TextStyle(fontSize: 14)),
+            SizedBox(height: 8),
+            Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                "Estás cerca de esta obra. ¿Te gustaría ver más detalles?",
+                style: TextStyle(fontSize: 12, color: Colors.orange.shade700),
+              ),
+            ),
           ],
         ),
         actions: [
           TextButton(
-            child: Text("Cerrar"),
+            child: Text("Después"),
             onPressed: () => Navigator.of(context).pop(),
           ),
-          TextButton(
-            child: Text("Ver detalles"),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange.shade600,
+              foregroundColor: Colors.white,
+            ),
+            child: Text("Ver Detalles"),
             onPressed: () {
               Navigator.of(context).pop();
               Navigator.push(
@@ -721,6 +1050,176 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
     );
   }
 
+  Widget _buildFloatingPaintingsWindow() {
+    if (!_showFloatingWindow || _nearbyPaintings.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Positioned(
+      top: 100,
+      left: 16,
+      right: 16,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header (sin cambios)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(12),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.palette, color: Colors.orange.shade600),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Obras de Arte Cercanas (${_nearbyPaintings.length})',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange.shade800,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: _closeFloatingWindow,
+                    iconSize: 20,
+                  ),
+                ],
+              ),
+            ),
+
+            // Lista de pinturas - Asegurar que el contexto sea correcto
+            Container(
+              constraints: const BoxConstraints(maxHeight: 300),
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: _nearbyPaintings.length,
+                itemBuilder: (context, index) {
+                  final painting = _nearbyPaintings[index];
+                  final distance =
+                      posicion3D != null && painting.position != null
+                      ? painting.position!.distanceTo(posicion3D!)
+                      : 0.0;
+
+                  return GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      _closeFloatingWindow();
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              PaintingDetailScreen(painting: painting),
+                        ),
+                      );
+                    },
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: Colors.orange.shade100,
+                        child: Icon(
+                          Icons.image,
+                          color: Colors.orange.shade600,
+                          size: 20,
+                        ),
+                      ),
+                      title: Text(
+                        painting.title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            painting.author,
+                            style: TextStyle(
+                              color: Colors.grey.shade600,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.straighten,
+                                size: 12,
+                                color: Colors.orange.shade600,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${distance.toStringAsFixed(2)}m',
+                                style: TextStyle(
+                                  color: Colors.orange.shade600,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      trailing: Icon(
+                        Icons.arrow_forward_ios,
+                        size: 16,
+                        color: Colors.grey.shade400,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+
+            // Footer (sin cambios)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: const BorderRadius.vertical(
+                  bottom: Radius.circular(12),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    size: 16,
+                    color: Colors.grey.shade600,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Toca una obra para ver más detalles',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final beaconsData = ref.watch(beaconsProvider);
@@ -739,6 +1238,27 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
         ),
         backgroundColor: isScanning ? Colors.green : Colors.red,
         actions: [
+          IconButton(
+            icon: Icon(Icons.bug_report),
+            onPressed: () {
+              setState(() {
+                // Toggle debug info
+              });
+            },
+          ),
+          // ✅ Botón para mostrar/ocultar ventana flotante
+          if (_nearbyPaintings.isNotEmpty)
+            IconButton(
+              icon: Icon(
+                _showFloatingWindow ? Icons.visibility_off : Icons.palette,
+                color: Colors.white,
+              ),
+              onPressed: () {
+                setState(() {
+                  _showFloatingWindow = !_showFloatingWindow;
+                });
+              },
+            ),
           IconButton(
             icon: Icon(
               isScanning ? Icons.bluetooth_searching : Icons.bluetooth_disabled,
@@ -781,41 +1301,33 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
             ),
           ),
 
-          if (paintingsNearby.isNotEmpty)
-            GestureDetector(
-              onTap: () => _showNearestPainting(paintingsNearby),
-              child: Container(
-                padding: const EdgeInsets.all(16.0),
-                margin: const EdgeInsets.all(8.0),
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.orange.shade200),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.palette, color: Colors.orange),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Obra más cercana: ${paintingsNearby.first.title}',
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.orange.shade800,
-                              ),
-                        ),
-                      ],
+          if (_nearbyPaintings.isNotEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(8.0),
+              color: Colors.orange.shade100,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.palette, color: Colors.orange.shade600, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${_nearbyPaintings.length} obra(s) cerca - V:$_consecutiveValidResults E:$_consecutiveEmptyResults',
+                    style: TextStyle(
+                      color: Colors.orange.shade800,
+                      fontWeight: FontWeight.bold,
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Toca para ver detalles',
-                      style: TextStyle(color: Colors.orange.shade600),
+                  ),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: () => setState(() => _showFloatingWindow = true),
+                    child: Icon(
+                      Icons.expand_more,
+                      color: Colors.orange.shade600,
+                      size: 20,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
 
@@ -835,11 +1347,12 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
               ),
               child: CustomPaint(
                 painter: MapaBeacons3DPainter(
-                  coordenadasBeacons: coordenadasBeacons, // Solo beacons fijos
+                  coordenadasBeacons: coordenadasBeacons,
                   posicionEstimada: posicionEstimada,
-                  posicion3D: posicion3D, // Agregar posición 3D
+                  posicion3D: posicion3D,
                   beaconsData: beaconsData,
-                  paintingsNearby: paintingsNearby, // Mostrar pinturas
+                  paintingsNearby:
+                      _nearbyPaintings, // ✅ Usar la lista actualizada
                   config: BeaconConfig(
                     environmentFactor: environmentFactor,
                     txPower: TX_POWER,
@@ -849,6 +1362,7 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
               ),
             ),
           ),
+          if (_showFloatingWindow) _buildFloatingPaintingsWindow(),
 
           // Lista de beacons
           Expanded(
@@ -995,6 +1509,15 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
         ],
       ),
     );
+  }
+}
+
+extension Point3DDistance on Point3D {
+  double distanceTo(Point3D other) {
+    final dx = x - other.x;
+    final dy = y - other.y;
+    final dz = z - other.z;
+    return sqrt(dx * dx + dy * dy + dz * dz);
   }
 }
 
