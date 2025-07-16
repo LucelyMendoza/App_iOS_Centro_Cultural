@@ -107,13 +107,15 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
   Map<DeviceIdentifier, double> distanciaAnterior = {};
 
   final Map<DeviceIdentifier, Offset> coordenadasBeacons = {
-    DeviceIdentifier("F5:15:6D:1E:BE:64"): const Offset(0.0, 0.0),
-    DeviceIdentifier("C8:FC:FC:6D:94:75"): const Offset(4.0, 0.0),
-    DeviceIdentifier("EB:01:6C:5F:23:82"): const Offset(2.0, 3.0),
-    DeviceIdentifier("C1:8E:5A:07:E1:85"): const Offset(2.0, 3.0),
+    // Beacon 1: Esquina inferior izquierda
+    DeviceIdentifier("EC:02:6D:60:24:83"): const Offset(0.0, 0.0),
+    // Beacon 2: Esquina inferior derecha
+    DeviceIdentifier("F6:16:6E:1F:BF:65"): const Offset(3.0, 0.0),
+    // Beacon 3: Esquina superior centro
+    DeviceIdentifier("EB:01:6C:5F:23:82"): const Offset(1.5, 3.0),
+    // Beacon 4: Centro de la sala (si tienes un cuarto beacon)
+    DeviceIdentifier("E8:FE:69:5C:20:7F"): const Offset(1.5, 1.5),
   };
-
-  Map<DeviceIdentifier, Offset> beaconsDetectados = {};
 
   Offset? posicionEstimada;
   DateTime? ultimaActualizacionPosicion;
@@ -150,15 +152,16 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
 
   void _initializeHybridService() {
     final beaconPositions3D = {
-      "E8:FE:69:5C:20:7F": Point3D(x: 0.0, y: 0.0, z: 2.0),
-      "C8:FC:FC:6D:94:75": Point3D(x: 4.0, y: 0.0, z: 2.0),
-      "EB:01:6C:5F:23:82": Point3D(x: 2.0, y: 3.0, z: 2.0),
+      // Coordenadas 3D reales de la sala (3m x 3m x 3m de altura)
+      "EC:02:6D:60:24:83": Point3D(x: 0.0, y: 0.0, z: 2.0), // Esquina 1
+      "F6:16:6E:1F:BF:65": Point3D(x: 3.0, y: 0.0, z: 2.0), // Esquina 2
+      "EB:01:6C:5F:23:82": Point3D(x: 1.5, y: 3.0, z: 2.0), // Esquina 3
+      "E8:FE:69:5C:20:7F": Point3D(x: 1.5, y: 1.5, z: 2.0), // Centro
     };
 
     _hybridService = HybridLocalizationService(
       beaconPositions: beaconPositions3D,
     );
-
     _hybridService.buildFingerprintDatabase();
   }
 
@@ -406,34 +409,24 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
     if (_disposed) return;
 
     final data = result.advertisementData.manufacturerData;
-
-    if (data.isEmpty || data.values.first.length < 23) {
-      return;
-    }
+    if (data.isEmpty || data.values.first.length < 23) return;
 
     final uuidStr = _bytesToUuid(data.values.first.sublist(2, 18));
-
-    if (uuidStr.toLowerCase() != tuUUID.toLowerCase()) {
-      return;
-    }
+    if (uuidStr.toLowerCase() != tuUUID.toLowerCase()) return;
 
     final id = result.device.id;
     final nuevoRssi = result.rssi;
 
-    // PERMITIR BEACONS DINÁMICOS
+    /*
     if (!coordenadasBeacons.containsKey(id)) {
       print("🆕 Nuevo beacon detectado: ${id.toString().substring(0, 17)}");
-
       beaconsDetectados[id] = Offset(
         Random().nextDouble() * 5.0,
         Random().nextDouble() * 4.0,
       );
-
-      distanciasBeacons[id] = 0.0;
-      rssiActual[id] = 0;
-      ultimaActualizacionBeacon[id] = DateTime.now();
-      distanciaAnterior[id] = 0.0;
+      // ... resto del código dinámico
     }
+    */
 
     print(
       "📡 Beacon: ${id.toString().substring(0, 17)} - RSSI: $nuevoRssi dBm",
@@ -463,6 +456,18 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
         .updateBeacon(id, promedioRssi, nuevaDistancia);
 
     print("📏 Distancia: ${nuevaDistancia.toStringAsFixed(3)}m");
+
+    if (!coordenadasBeacons.containsKey(id)) {
+      print(
+        "⚠️ Beacon desconocido ignorado: ${id.toString().substring(0, 17)}",
+      );
+      return; // Salir si no es un beacon conocido
+    }
+
+    // Continuar con el procesamiento normal para beacons conocidos
+    print(
+      "📡 Beacon conocido: ${id.toString().substring(0, 17)} - RSSI: $nuevoRssi dBm",
+    );
   }
 
   int _calcularRSSIFiltrado(List<int> lista) {
@@ -482,7 +487,11 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
     final beaconsActivos = <String, double>{};
     final rssiActivos = <String, int>{};
 
+    // Recopilar solo beacons activos y conocidos
     for (final entry in distanciasBeacons.entries) {
+      // ✅ VERIFICAR que el beacon esté en coordenadasBeacons
+      if (!coordenadasBeacons.containsKey(entry.key)) continue;
+
       final id = entry.key.toString();
       final ultimaActualizacion = ultimaActualizacionBeacon[entry.key];
 
@@ -493,9 +502,6 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
       }
     }
 
-    print("🔍 Beacons activos para localización: ${beaconsActivos.length}");
-    print("📊 Datos: $beaconsActivos");
-
     if (beaconsActivos.length >= 2) {
       try {
         posicion3D = _hybridService.hybridLocalization(
@@ -504,14 +510,29 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
         );
 
         if (posicion3D != null) {
-          print(
-            "📍 Posición 3D calculada: (${posicion3D!.x.toStringAsFixed(2)}, ${posicion3D!.y.toStringAsFixed(2)}, ${posicion3D!.z.toStringAsFixed(2)})",
+          // ✅ AJUSTAR la altura del usuario (celular a 1.5m típicamente)
+          posicion3D = Point3D(
+            x: posicion3D!.x,
+            y: posicion3D!.y,
+            z: 1.5, // Altura fija del usuario con celular
           );
 
+          print(
+            "📍 Posición 3D usuario: (${posicion3D!.x.toStringAsFixed(2)}, ${posicion3D!.y.toStringAsFixed(2)}, ${posicion3D!.z.toStringAsFixed(2)})",
+          );
+
+          // ✅ LIMITAR la posición del usuario dentro de la sala 3x3m
+          final posicionLimitada = Point3D(
+            x: posicion3D!.x.clamp(0.0, 3.0),
+            y: posicion3D!.y.clamp(0.0, 3.0),
+            z: 1.5,
+          );
+
+          posicion3D = posicionLimitada;
           posicionEstimada = Offset(posicion3D!.x, posicion3D!.y);
 
-          final radios = [1.0, 2.0, 3.0, 5.0];
-
+          // Buscar pinturas cercanas con diferentes radios
+          final radios = [0.5, 1.0, 1.5, 2.0];
           for (final radius in radios) {
             final paintingsEnRadio = _hybridService.getNearbyPaintings(
               posicion3D!,
@@ -519,86 +540,19 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
             );
 
             if (paintingsEnRadio.isNotEmpty) {
-              print(
-                "🎨 Encontradas ${paintingsEnRadio.length} pinturas en radio ${radius}m:",
-              );
-              for (final painting in paintingsEnRadio) {
-                print("  - ${painting.title} (${painting.author})");
-              }
-
               paintingsNearby = paintingsEnRadio;
               break;
             }
           }
 
-          if (paintingsNearby.isEmpty) {
-            print("❌ No se encontraron pinturas cercanas en ningún radio");
-          }
-
           if (mounted) {
             setState(() {
               ultimaActualizacionPosicion = DateTime.now();
             });
           }
-        } else {
-          print("❌ La localización híbrida devolvió null");
         }
       } catch (e) {
         print("❌ Error en localización híbrida: $e");
-      }
-    } else {
-      print(
-        "⚠️ Insuficientes beacons activos (${beaconsActivos.length}/2 requeridos)",
-      );
-
-      if (beaconsActivos.length >= 3) {
-        try {
-          final beaconsList = beaconsActivos.entries.toList();
-          final p1 = coordenadasBeacons.entries
-              .firstWhere((e) => e.key.toString() == beaconsList[0].key)
-              .value;
-          final p2 = coordenadasBeacons.entries
-              .firstWhere((e) => e.key.toString() == beaconsList[1].key)
-              .value;
-          final p3 = coordenadasBeacons.entries
-              .firstWhere((e) => e.key.toString() == beaconsList[2].key)
-              .value;
-
-          final posicion2D = trilateracion(
-            p1,
-            beaconsList[0].value,
-            p2,
-            beaconsList[1].value,
-            p3,
-            beaconsList[2].value,
-          );
-
-          posicionEstimada = posicion2D;
-          posicion3D = Point3D(x: posicion2D.dx, y: posicion2D.dy, z: 1.5);
-
-          print(
-            "📍 Posición 2D (trilateración): (${posicion2D.dx.toStringAsFixed(2)}, ${posicion2D.dy.toStringAsFixed(2)})",
-          );
-
-          paintingsNearby = _hybridService.getNearbyPaintings(
-            posicion3D!,
-            radius: 3.0,
-          );
-
-          if (paintingsNearby.isNotEmpty) {
-            print(
-              "🎨 Pinturas encontradas con trilateración: ${paintingsNearby.length}",
-            );
-          }
-
-          if (mounted) {
-            setState(() {
-              ultimaActualizacionPosicion = DateTime.now();
-            });
-          }
-        } catch (e) {
-          print("❌ Error en trilateración básica: $e");
-        }
       }
     }
   }
@@ -869,15 +823,19 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
               decoration: BoxDecoration(
                 border: Border.all(color: Colors.grey.shade300),
                 borderRadius: BorderRadius.circular(8),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Colors.blue.shade50, Colors.green.shade50],
+                ),
               ),
               child: CustomPaint(
-                painter: MapaBeaconsPainter(
-                  coordenadasBeacons: {
-                    ...coordenadasBeacons,
-                    ...beaconsDetectados,
-                  },
+                painter: MapaBeacons3DPainter(
+                  coordenadasBeacons: coordenadasBeacons, // Solo beacons fijos
                   posicionEstimada: posicionEstimada,
+                  posicion3D: posicion3D, // Agregar posición 3D
                   beaconsData: beaconsData,
+                  paintingsNearby: paintingsNearby, // Mostrar pinturas
                   config: BeaconConfig(
                     environmentFactor: environmentFactor,
                     txPower: TX_POWER,
@@ -1036,6 +994,256 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
   }
 }
 
+class MapaBeacons3DPainter extends CustomPainter {
+  final Map<DeviceIdentifier, Offset> coordenadasBeacons;
+  final Offset? posicionEstimada;
+  final Point3D? posicion3D;
+  final Map<DeviceIdentifier, BeaconData> beaconsData;
+  final List<Painting> paintingsNearby;
+  final BeaconConfig config;
+
+  MapaBeacons3DPainter({
+    required this.coordenadasBeacons,
+    this.posicionEstimada,
+    this.posicion3D,
+    required this.beaconsData,
+    required this.paintingsNearby,
+    required this.config,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
+
+    // Escala para sala de 3x3 metros
+    final scaleX = size.width / 3.5; // Un poco más de espacio
+    final scaleY = size.height / 3.5;
+
+    _drawRoom3D(canvas, size, scaleX, scaleY);
+    _drawBeacons3D(canvas, size, scaleX, scaleY);
+    _drawPaintings3D(canvas, size, scaleX, scaleY);
+    _drawUser3D(canvas, size, scaleX, scaleY);
+  }
+
+  void _drawRoom3D(Canvas canvas, Size size, double scaleX, double scaleY) {
+    // Dibujar piso con perspectiva
+    final floorPaint = Paint()
+      ..color = Colors.grey.shade200
+      ..style = PaintingStyle.fill;
+
+    final floorPath = Path()
+      ..moveTo(0, size.height)
+      ..lineTo(size.width, size.height)
+      ..lineTo(size.width * 0.8, size.height * 0.8)
+      ..lineTo(size.width * 0.2, size.height * 0.8)
+      ..close();
+
+    canvas.drawPath(floorPath, floorPaint);
+
+    // Dibujar paredes
+    final wallPaint = Paint()
+      ..color = Colors.grey.shade300
+      ..style = PaintingStyle.fill;
+
+    // Pared izquierda
+    final leftWallPath = Path()
+      ..moveTo(0, size.height)
+      ..lineTo(0, 0)
+      ..lineTo(size.width * 0.2, size.height * 0.2)
+      ..lineTo(size.width * 0.2, size.height * 0.8)
+      ..close();
+
+    canvas.drawPath(leftWallPath, wallPaint);
+
+    // Pared derecha
+    final rightWallPath = Path()
+      ..moveTo(size.width, size.height)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width * 0.8, size.height * 0.2)
+      ..lineTo(size.width * 0.8, size.height * 0.8)
+      ..close();
+
+    canvas.drawPath(rightWallPath, wallPaint);
+
+    // Grid del piso
+    final gridPaint = Paint()
+      ..color = Colors.grey.shade400
+      ..strokeWidth = 1;
+
+    for (int i = 0; i <= 3; i++) {
+      final x = i * scaleX;
+      canvas.drawLine(
+        Offset(x, size.height),
+        Offset(x + size.width * 0.2, size.height * 0.8),
+        gridPaint,
+      );
+    }
+  }
+
+  void _drawBeacons3D(Canvas canvas, Size size, double scaleX, double scaleY) {
+    final beaconPaint = Paint()..color = Colors.blue.shade600;
+    final beaconInactivePaint = Paint()..color = Colors.grey.shade400;
+    final textPainter = TextPainter(textDirection: TextDirection.ltr);
+
+    for (final entry in coordenadasBeacons.entries) {
+      final beaconData = beaconsData[entry.key];
+      final isActive =
+          beaconData != null &&
+          DateTime.now().difference(beaconData.ultimaActualizacion).inSeconds <
+              5;
+
+      // Posición 3D del beacon (fijo en altura 2m)
+      final beaconX = entry.value.dx * scaleX;
+      final beaconY = size.height - entry.value.dy * scaleY;
+
+      // Efecto 3D - beacon en la pared a 2m de altura
+      final beacon3DX = beaconX + (beaconX * 0.1);
+      final beacon3DY = beaconY - (2.0 * scaleY * 0.3); // Altura 2m
+
+      // Dibujar beacon con efecto 3D
+      canvas.drawCircle(
+        Offset(beacon3DX, beacon3DY),
+        isActive ? 15 : 10,
+        isActive ? beaconPaint : beaconInactivePaint,
+      );
+
+      // Highlight central
+      canvas.drawCircle(
+        Offset(beacon3DX, beacon3DY),
+        isActive ? 8 : 5,
+        Paint()..color = Colors.white,
+      );
+
+      // Rango de detección
+      if (isActive && beaconData != null) {
+        final rangePaint = Paint()
+          ..color = Colors.blue.withOpacity(0.2)
+          ..style = PaintingStyle.fill;
+
+        final rangeRadius = beaconData.distancia * min(scaleX, scaleY) * 0.8;
+        canvas.drawCircle(Offset(beaconX, beaconY), rangeRadius, rangePaint);
+      }
+
+      // Etiqueta del beacon
+      final beaconId = entry.key.toString().substring(0, 8);
+      final distanciaText = beaconData?.distancia.toStringAsFixed(1) ?? "?";
+
+      textPainter.text = TextSpan(
+        text: '$beaconId\n${distanciaText}m',
+        style: TextStyle(
+          color: isActive ? Colors.blue.shade800 : Colors.grey.shade600,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
+      );
+      textPainter.layout();
+      textPainter.paint(canvas, Offset(beacon3DX + 20, beacon3DY - 15));
+    }
+  }
+
+  void _drawPaintings3D(
+    Canvas canvas,
+    Size size,
+    double scaleX,
+    double scaleY,
+  ) {
+    final paintingPaint = Paint()..color = Colors.orange.shade600;
+    final textPainter = TextPainter(textDirection: TextDirection.ltr);
+
+    for (final painting in paintingsNearby) {
+      // Verificar si position no es null antes de acceder a sus propiedades
+      if (painting.position == null) continue;
+
+      final paintingX = painting.position!.x * scaleX;
+      final paintingY = size.height - painting.position!.y * scaleY;
+
+      // Pintura en la pared a 1.5m de altura
+      final painting3DX = paintingX + (paintingX * 0.1);
+      final painting3DY = paintingY - (1.5 * scaleY * 0.3);
+
+      // Dibujar marco de pintura
+      final frameRect = Rect.fromCenter(
+        center: Offset(painting3DX, painting3DY),
+        width: 20,
+        height: 15,
+      );
+
+      canvas.drawRect(frameRect, paintingPaint);
+      canvas.drawRect(
+        frameRect.deflate(2),
+        Paint()..color = Colors.orange.shade200,
+      );
+
+      // Etiqueta de la pintura
+      textPainter.text = TextSpan(
+        text: painting.title,
+        style: TextStyle(
+          color: Colors.orange.shade800,
+          fontSize: 9,
+          fontWeight: FontWeight.bold,
+        ),
+      );
+      textPainter.layout();
+      textPainter.paint(canvas, Offset(painting3DX + 25, painting3DY - 10));
+    }
+  }
+
+  void _drawUser3D(Canvas canvas, Size size, double scaleX, double scaleY) {
+    if (posicionEstimada == null || posicion3D == null) return;
+
+    final userPaint = Paint()..color = Colors.red.shade600;
+    final textPainter = TextPainter(textDirection: TextDirection.ltr);
+
+    // Posición del usuario en el piso
+    final userX = posicionEstimada!.dx * scaleX;
+    final userY = size.height - posicionEstimada!.dy * scaleY;
+
+    // Usuario en el piso a 1.5m de altura (celular)
+    final user3DX = userX + (userX * 0.05);
+    final user3DY = userY - (1.5 * scaleY * 0.2);
+
+    // Dibujar usuario con animación pulsante
+    canvas.drawCircle(Offset(user3DX, user3DY), 20, userPaint);
+    canvas.drawCircle(
+      Offset(user3DX, user3DY),
+      15,
+      Paint()..color = Colors.white,
+    );
+    canvas.drawCircle(Offset(user3DX, user3DY), 10, userPaint);
+
+    // Sombra en el piso
+    canvas.drawCircle(
+      Offset(userX, userY),
+      12,
+      Paint()..color = Colors.black.withOpacity(0.3),
+    );
+
+    // Fix for the null safety issue - use null-aware operator
+    final posicion3DActual =
+        posicion3D!; // Safe because we already checked for null above
+
+    // Etiqueta del usuario
+    textPainter.text = TextSpan(
+      text:
+          'TÚ\n(${posicion3DActual.x.toStringAsFixed(1)}, ${posicion3DActual.y.toStringAsFixed(1)}, ${posicion3DActual.z.toStringAsFixed(1)})',
+      style: const TextStyle(
+        color: Colors.red,
+        fontSize: 11,
+        fontWeight: FontWeight.bold,
+      ),
+    );
+    textPainter.layout();
+    textPainter.paint(canvas, Offset(user3DX + 25, user3DY - 20));
+  }
+
+  @override
+  bool shouldRepaint(MapaBeacons3DPainter oldDelegate) {
+    return oldDelegate.posicionEstimada != posicionEstimada ||
+        oldDelegate.beaconsData != beaconsData ||
+        oldDelegate.paintingsNearby != paintingsNearby;
+  }
+}
+
 class BeaconConfig {
   final double environmentFactor;
   final int txPower;
@@ -1071,8 +1279,13 @@ class MapaBeaconsPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     final textPainter = TextPainter(textDirection: TextDirection.ltr);
+
     final scaleX = size.width / 8;
     final scaleY = size.height / 8;
+
+    if (scaleX.isNaN || scaleY.isNaN || scaleX <= 0 || scaleY <= 0) {
+      return;
+    }
 
     // Dibujar grid
     final gridPaint = Paint()

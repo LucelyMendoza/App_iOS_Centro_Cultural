@@ -67,8 +67,8 @@ class HybridLocalizationService {
         details: "Pintura renacentista famosa",
         imagePath: "assets/monalisa.jpg",
         gallery: "Galería Principal",
-        position: Point3D(x: 1.0, y: 1.0, z: 1.5), // Cerca del beacon 1
-        detectionRadius: 1.5,
+        position: Point3D(x: 0.5, y: 0.2, z: 1.5), // Cerca del beacon 1
+        detectionRadius: 0.8,
       ),
       Painting(
         title: "La Noche Estrellada",
@@ -77,8 +77,8 @@ class HybridLocalizationService {
         details: "Obra maestra del postimpresionismo",
         imagePath: "assets/starry_night.jpg",
         gallery: "Galería Principal",
-        position: Point3D(x: 3.0, y: 2.0, z: 1.5), // Cerca del beacon 2
-        detectionRadius: 1.5,
+        position: Point3D(x: 2.5, y: 0.2, z: 1.5), // Cerca del beacon 2
+        detectionRadius: 0.8,
       ),
       Painting(
         title: "El Grito",
@@ -87,8 +87,8 @@ class HybridLocalizationService {
         details: "Expresionismo noruego",
         imagePath: "assets/el_grito.jpg",
         gallery: "Galería Principal",
-        position: Point3D(x: 2.0, y: 3.0, z: 1.5), // Cerca del beacon 3
-        detectionRadius: 1.5,
+        position: Point3D(x: 1.5, y: 2.7, z: 1.5), // Cerca del beacon 3
+        detectionRadius: 0.8,
       ),
     ];
   }
@@ -213,24 +213,24 @@ class HybridLocalizationService {
   }
 
   // Técnica híbrida: Combinar trilateración y fingerprinting
+  // En hybrid_localization_service.dart
   Point3D? hybridLocalization(
     Map<String, double> beaconDistances,
     Map<String, int> beaconRSSI,
   ) {
+    // Convertir RSSI a double
     final rssiDouble = beaconRSSI.map((k, v) => MapEntry(k, v.toDouble()));
 
+    // Obtener resultados
     final trilaterationResult = trilaterate3D(beaconDistances);
     final fingerprintResult = fingerprintLocalization(rssiDouble);
 
+    // Combinar con pesos ajustables
     if (trilaterationResult != null && fingerprintResult != null) {
-      // Combinar resultados con pesos
-      final weight1 = 0.7; // Más peso a trilateración
-      final weight2 = 0.3; // Menos peso a fingerprinting
-
       return Point3D(
-        x: trilaterationResult.x * weight1 + fingerprintResult.x * weight2,
-        y: trilaterationResult.y * weight1 + fingerprintResult.y * weight2,
-        z: trilaterationResult.z * weight1 + fingerprintResult.z * weight2,
+        x: (trilaterationResult.x * 0.7 + fingerprintResult.x * 0.3),
+        y: (trilaterationResult.y * 0.7 + fingerprintResult.y * 0.3),
+        z: 1.5, // Altura fija del usuario
       );
     }
 
