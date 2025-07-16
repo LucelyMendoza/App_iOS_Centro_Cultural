@@ -2,13 +2,61 @@ import 'dart:math';
 import '../models/point3d.dart';
 import '../models/painting.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../views/kalman_filter.dart';
 
 class HybridLocalizationService {
   final Map<String, Point3D> beaconPositions;
   final Map<String, Map<String, double>> fingerprintDatabase = {};
   List<Painting> _paintings = [];
+  final KalmanFilter3D _kalmanFilter = KalmanFilter3D();
 
   HybridLocalizationService({required this.beaconPositions});
+
+  List<MapEntry<String, double>> _findKNearestNeighbors(
+    Map<String, double> currentRSSI,
+    int k,
+  ) {
+    final distances = <String, double>{};
+
+    for (final entry in fingerprintDatabase.entries) {
+      double distance = 0;
+      for (final beaconId in currentRSSI.keys) {
+        if (entry.value.containsKey(beaconId)) {
+          distance += pow(currentRSSI[beaconId]! - entry.value[beaconId]!, 2);
+        }
+      }
+      distances[entry.key] = sqrt(distance);
+    }
+
+    final sortedDistances = distances.entries.toList()
+      ..sort((a, b) => a.value.compareTo(b.value));
+
+    return sortedDistances.take(k).toList();
+  }
+
+  Point3D? knnFingerprintLocalization(
+    Map<String, double> currentRSSI, {
+    int k = 3,
+  }) {
+    final neighbors = _findKNearestNeighbors(currentRSSI, k);
+
+    if (neighbors.isEmpty) return null;
+
+    double x = 0, y = 0, z = 0;
+    double totalWeight = 0;
+
+    for (final neighbor in neighbors) {
+      final coords = neighbor.key.split('_');
+      final weight = 1 / (neighbor.value + 0.0001); // Evitar división por cero
+
+      x += double.parse(coords[0]) * weight;
+      y += double.parse(coords[1]) * weight;
+      z += double.parse(coords[2]) * weight;
+      totalWeight += weight;
+    }
+
+    return Point3D(x: x / totalWeight, y: y / totalWeight, z: z / totalWeight);
+  }
 
   // Fase offline: Construir base de datos de fingerprints
   Future<void> buildFingerprintDatabase() async {
@@ -39,57 +87,114 @@ class HybridLocalizationService {
     // Agregar más fingerprints según tu espacio
   }
 
-  Future<void> _loadPaintings() async {
-    // Commented out Firebase code - uncomment when Firebase is properly configured
-    /*
-    final db = FirebaseFirestore.instance;
-    final galleriesSnapshot = await db.collection('galerias').get();
-
-    for (final doc in galleriesSnapshot.docs) {
-      final galleryTitle = doc.data()['title'];
-      final paintingsSnapshot = await doc.reference
-          .collection('pinturas')
+  // En HybridLocalizationService
+  Future<void> loadFingerprintsFromFirebase() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('fingerprints')
           .get();
 
-      for (final paintingDoc in paintingsSnapshot.docs) {
-        final data = paintingDoc.data();
-        _paintings.add(Painting.fromMap(data, galleryTitle));
-      }
-    }
-    */
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final position = doc.id; // Formato "x_y_z"
+        final rssiValues = Map<String, double>.from(data['rssi_values']);
 
-    // Static paintings for testing
+        fingerprintDatabase[position] = rssiValues;
+      }
+    } catch (e) {
+      print("Error loading fingerprints: $e");
+      // Mantener datos hardcodeados como fallback
+      _addFingerprintData();
+    }
+  }
+
+  Future<void> loadPaintingsFromFirestore() async {
+    try {
+      _paintings = [];
+      final db = FirebaseFirestore.instance;
+
+      // Obtener todas las galerías
+      final galleriesSnapshot = await db.collection('galerias').get();
+
+      for (final galleryDoc in galleriesSnapshot.docs) {
+        final paintingsSnapshot = await galleryDoc.reference
+            .collection('pinturas')
+            .get();
+
+        for (final paintingDoc in paintingsSnapshot.docs) {
+          final data = paintingDoc.data();
+          _paintings.add(Painting.fromMap(data, galleryDoc.id));
+        }
+      }
+    } catch (e) {
+      print("Error cargando pinturas: $e");
+      // Cargar datos de respaldo si es necesario
+      _loadBackupPaintings();
+    }
+  }
+
+  Future<void> _loadPaintings() async {
+    try {
+      _paintings = []; // Limpiar lista antes de cargar
+
+      final db = FirebaseFirestore.instance;
+      final gallerySnapshot = await db
+          .collection('galerias')
+          .doc('galeria1')
+          .get();
+
+      if (gallerySnapshot.exists) {
+        final paintingsSnapshot = await gallerySnapshot.reference
+            .collection('pinturas')
+            .orderBy(
+              'posicion',
+            ) // Asume que tienes un campo 'posicion' para orden
+            .get();
+
+        for (final paintingDoc in paintingsSnapshot.docs) {
+          final data = paintingDoc.data();
+          final positionData = data['posicion'] as Map<String, dynamic>;
+
+          _paintings.add(
+            Painting(
+              title: data['titulo'] ?? 'Sin título',
+              author: data['autor'] ?? 'Autor desconocido',
+              year: data['año']?.toString() ?? 'Año desconocido',
+              details: data['descripcion'] ?? 'Descripción no disponible',
+              imagePath: data['imagen_url'] ?? 'assets/default_painting.jpg',
+              gallery: 'Galería 1',
+              position: Point3D(
+                x: (positionData['x'] as num).toDouble(),
+                y: (positionData['y'] as num).toDouble(),
+                z: (positionData['z'] as num).toDouble(),
+              ),
+              detectionRadius:
+                  (data['radio_deteccion'] as num?)?.toDouble() ?? 0.8,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print("Error cargando pinturas: $e");
+      // Opcional: cargar datos de respaldo
+      _loadBackupPaintings();
+    }
+  }
+
+  void _loadBackupPaintings() {
     _paintings = [
+      // Datos de respaldo por si falla Firestore
       Painting(
-        title: "La Mona Lisa",
-        author: "Leonardo da Vinci",
-        year: "1503",
-        details: "Pintura renacentista famosa",
-        imagePath: "assets/monalisa.jpg",
-        gallery: "Galería Principal",
-        position: Point3D(x: 0.5, y: 0.2, z: 1.5), // Cerca del beacon 1
+        title: "Pintura de respaldo 1",
+        author: "Artista desconocido",
+        year: "2023",
+        details: "Descripción de ejemplo",
+        imagePath: "assets/default_painting.jpg",
+        gallery: "Galería 1",
+        position: Point3D(x: 0.5, y: 0.5, z: 1.5),
         detectionRadius: 0.8,
       ),
-      Painting(
-        title: "La Noche Estrellada",
-        author: "Vincent van Gogh",
-        year: "1889",
-        details: "Obra maestra del postimpresionismo",
-        imagePath: "assets/starry_night.jpg",
-        gallery: "Galería Principal",
-        position: Point3D(x: 2.5, y: 0.2, z: 1.5), // Cerca del beacon 2
-        detectionRadius: 0.8,
-      ),
-      Painting(
-        title: "El Grito",
-        author: "Edvard Munch",
-        year: "1893",
-        details: "Expresionismo noruego",
-        imagePath: "assets/el_grito.jpg",
-        gallery: "Galería Principal",
-        position: Point3D(x: 1.5, y: 2.7, z: 1.5), // Cerca del beacon 3
-        detectionRadius: 0.8,
-      ),
+      // ... otras pinturas de respaldo
     ];
   }
 
@@ -223,29 +328,33 @@ class HybridLocalizationService {
 
     // Obtener resultados
     final trilaterationResult = trilaterate3D(beaconDistances);
-    final fingerprintResult = fingerprintLocalization(rssiDouble);
+    final fingerprintResult = knnFingerprintLocalization(rssiDouble);
 
-    // Combinar con pesos ajustables
+    Point3D? combinedResult;
+
     if (trilaterationResult != null && fingerprintResult != null) {
-      return Point3D(
-        x: (trilaterationResult.x * 0.7 + fingerprintResult.x * 0.3),
-        y: (trilaterationResult.y * 0.7 + fingerprintResult.y * 0.3),
+      combinedResult = Point3D(
+        x: (trilaterationResult.x * 0.6 + fingerprintResult.x * 0.4),
+        y: (trilaterationResult.y * 0.6 + fingerprintResult.y * 0.4),
         z: 1.5, // Altura fija del usuario
       );
+    } else {
+      combinedResult = trilaterationResult ?? fingerprintResult;
     }
 
-    return trilaterationResult ?? fingerprintResult;
+    // Aplicar filtro de Kalman si tenemos resultado
+    return combinedResult != null ? _kalmanFilter.update(combinedResult) : null;
   }
 
   // Encontrar pinturas cercanas
   List<Painting> getNearbyPaintings(Point3D position, {double radius = 1.0}) {
     return _paintings.where((painting) {
-      return painting.isNearby(
-        position.x,
-        position.y,
-        position.z,
-        radius: radius,
-      );
+      if (painting.position == null) return false;
+
+      final distance = position.distanceTo(painting.position!);
+      final effectiveRadius = painting.detectionRadius * 1.2; // Pequeño margen
+
+      return distance <= effectiveRadius;
     }).toList();
   }
 }

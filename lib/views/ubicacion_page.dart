@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/hybrid_localization_service.dart';
 import '../models/point3d.dart';
 import '../models/painting.dart';
+import 'painting_detail_screen.dart';
 
 class UbicacionPage extends ConsumerStatefulWidget {
   const UbicacionPage({super.key});
@@ -90,6 +91,9 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
   late HybridLocalizationService _hybridService;
   Point3D? posicion3D;
   List<Painting> paintingsNearby = [];
+  List<Painting> nearbyPaintings = [];
+  List<Painting> _nearbyPaintings = []; // Usar solo una lista
+  String? _lastNotifiedPainting;
 
   // TIMERS Y SUBSCRIPTIONS
   StreamSubscription? _subscription;
@@ -139,6 +143,12 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
     inicializarMapas();
     iniciarProcesoBluetooth();
     configurarTimers();
+    _initializeServices();
+  }
+
+  Future<void> _initializeServices() async {
+    await _hybridService.loadPaintingsFromFirestore();
+    iniciarProcesoBluetooth();
   }
 
   void inicializarMapas() {
@@ -150,19 +160,21 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
     }
   }
 
-  void _initializeHybridService() {
-    final beaconPositions3D = {
-      // Coordenadas 3D reales de la sala (3m x 3m x 3m de altura)
-      "EC:02:6D:60:24:83": Point3D(x: 0.0, y: 0.0, z: 2.0), // Esquina 1
-      "F6:16:6E:1F:BF:65": Point3D(x: 3.0, y: 0.0, z: 2.0), // Esquina 2
-      "EB:01:6C:5F:23:82": Point3D(x: 1.5, y: 3.0, z: 2.0), // Esquina 3
-      "E8:FE:69:5C:20:7F": Point3D(x: 1.5, y: 1.5, z: 2.0), // Centro
+  void _initializeHybridService() async {
+    final Map<String, Point3D> beaconPositions3D = {
+      "EC:02:6D:60:24:83": Point3D(x: 0.0, y: 0.0, z: 2.0),
+      "F6:16:6E:1F:BF:65": Point3D(x: 3.0, y: 0.0, z: 2.0),
+      "EB:01:6C:5F:23:82": Point3D(x: 1.5, y: 3.0, z: 2.0),
+      "E8:FE:69:5C:20:7F": Point3D(x: 1.5, y: 1.5, z: 2.0),
     };
 
     _hybridService = HybridLocalizationService(
       beaconPositions: beaconPositions3D,
     );
-    _hybridService.buildFingerprintDatabase();
+
+    await _hybridService.loadFingerprintsFromFirebase(); // Cargar fingerprints
+    await _hybridService.loadPaintingsFromFirestore(); // Cargar pinturas
+    await _hybridService.buildFingerprintDatabase();
   }
 
   void configurarTimers() {
@@ -487,9 +499,7 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
     final beaconsActivos = <String, double>{};
     final rssiActivos = <String, int>{};
 
-    // Recopilar solo beacons activos y conocidos
     for (final entry in distanciasBeacons.entries) {
-      // ✅ VERIFICAR que el beacon esté en coordenadasBeacons
       if (!coordenadasBeacons.containsKey(entry.key)) continue;
 
       final id = entry.key.toString();
@@ -510,40 +520,17 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
         );
 
         if (posicion3D != null) {
-          // ✅ AJUSTAR la altura del usuario (celular a 1.5m típicamente)
+          // Actualizar posición
           posicion3D = Point3D(
-            x: posicion3D!.x,
-            y: posicion3D!.y,
-            z: 1.5, // Altura fija del usuario con celular
-          );
-
-          print(
-            "📍 Posición 3D usuario: (${posicion3D!.x.toStringAsFixed(2)}, ${posicion3D!.y.toStringAsFixed(2)}, ${posicion3D!.z.toStringAsFixed(2)})",
-          );
-
-          // ✅ LIMITAR la posición del usuario dentro de la sala 3x3m
-          final posicionLimitada = Point3D(
             x: posicion3D!.x.clamp(0.0, 3.0),
             y: posicion3D!.y.clamp(0.0, 3.0),
             z: 1.5,
           );
 
-          posicion3D = posicionLimitada;
           posicionEstimada = Offset(posicion3D!.x, posicion3D!.y);
 
-          // Buscar pinturas cercanas con diferentes radios
-          final radios = [0.5, 1.0, 1.5, 2.0];
-          for (final radius in radios) {
-            final paintingsEnRadio = _hybridService.getNearbyPaintings(
-              posicion3D!,
-              radius: radius,
-            );
-
-            if (paintingsEnRadio.isNotEmpty) {
-              paintingsNearby = paintingsEnRadio;
-              break;
-            }
-          }
+          // Actualizar pinturas cercanas
+          _updateNearbyPaintings(posicion3D!);
 
           if (mounted) {
             setState(() {
@@ -555,6 +542,75 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
         print("❌ Error en localización híbrida: $e");
       }
     }
+  }
+
+  void _updateNearbyPaintings(Point3D userPosition) {
+    final newNearby = _hybridService.getNearbyPaintings(userPosition);
+
+    if (!_listEquals(newNearby, _nearbyPaintings)) {
+      if (mounted) {
+        setState(() {
+          _nearbyPaintings = newNearby;
+        });
+      }
+
+      if (newNearby.isNotEmpty) {
+        _showNearestPaintingNotification(newNearby.first);
+      } else {
+        _lastNotifiedPainting =
+            null; // Resetear cuando no hay pinturas cercanas
+      }
+    }
+  }
+
+  bool _listEquals(List<Painting> a, List<Painting> b) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i].title != b[i].title) return false;
+    }
+    return true;
+  }
+
+  void _showNearestPaintingNotification(Painting painting) {
+    // Evitar notificaciones repetidas para la misma pintura
+    if (_lastNotifiedPainting == painting.title) return;
+    _lastNotifiedPainting = painting.title;
+
+    // Usar un diálogo más informativo
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text("Pintura cercana detectada"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(painting.title, style: TextStyle(fontWeight: FontWeight.bold)),
+            SizedBox(height: 8),
+            Text(painting.author),
+          ],
+        ),
+        actions: [
+          TextButton(
+            child: Text("Cerrar"),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          TextButton(
+            child: Text("Ver detalles"),
+            onPressed: () {
+              Navigator.of(context).pop();
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      PaintingDetailScreen(painting: painting),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
   }
 
   double calcularDistancia(int rssi, {int txPower = TX_POWER}) {
@@ -643,6 +699,28 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
     super.dispose();
   }
 
+  void _showNearestPainting(List<Painting> nearbyPaintings) {
+    if (nearbyPaintings.isEmpty || !mounted) return;
+
+    // Ordenar por distancia (más cercana primero)
+    nearbyPaintings.sort((a, b) {
+      if (posicion3D == null) return 0;
+      final distA = a.position?.distanceTo(posicion3D!) ?? double.infinity;
+      final distB = b.position?.distanceTo(posicion3D!) ?? double.infinity;
+      return distA.compareTo(distB);
+    });
+
+    final nearestPainting = nearbyPaintings.first;
+
+    // Mostrar diálogo o navegar directamente
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PaintingDetailScreen(painting: nearestPainting),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final beaconsData = ref.watch(beaconsProvider);
@@ -704,114 +782,40 @@ class _UbicacionPageState extends ConsumerState<UbicacionPage> {
           ),
 
           if (paintingsNearby.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.all(16.0),
-              margin: const EdgeInsets.all(8.0),
-              decoration: BoxDecoration(
-                color: Colors.orange.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.orange.shade200),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.palette, color: Colors.orange),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Obras de Arte Cercanas (${paintingsNearby.length})',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.orange.shade800,
-                            ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  ...paintingsNearby.map(
-                    (painting) => Container(
-                      margin: const EdgeInsets.symmetric(vertical: 4.0),
-                      padding: const EdgeInsets.all(8.0),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(6),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.shade300,
-                            blurRadius: 2,
-                            offset: const Offset(0, 1),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.art_track, color: Colors.orange),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  painting.title,
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                Text(
-                                  '${painting.author} (${painting.year})',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+            GestureDetector(
+              onTap: () => _showNearestPainting(paintingsNearby),
+              child: Container(
+                padding: const EdgeInsets.all(16.0),
+                margin: const EdgeInsets.all(8.0),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.palette, color: Colors.orange),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Obra más cercana: ${paintingsNearby.first.title}',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.orange.shade800,
+                              ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
-            ),
-
-          if (posicionEstimada != null)
-            Container(
-              padding: const EdgeInsets.all(16.0),
-              margin: const EdgeInsets.all(8.0),
-              decoration: BoxDecoration(
-                color: Colors.blue.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.blue.shade200),
-              ),
-              child: Column(
-                children: [
-                  Text(
-                    '📍 Posición Estimada',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.blue.shade800,
+                    const SizedBox(height: 8),
+                    Text(
+                      'Toca para ver detalles',
+                      style: TextStyle(color: Colors.orange.shade600),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'X: ${posicionEstimada!.dx.toStringAsFixed(3)}m\nY: ${posicionEstimada!.dy.toStringAsFixed(3)}m',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.blue,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Última actualización: ${ultimaActualizacionPosicion != null ? "${DateTime.now().difference(ultimaActualizacionPosicion!).inMilliseconds}ms" : "nunca"}',
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
 

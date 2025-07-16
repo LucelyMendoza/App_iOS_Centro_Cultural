@@ -27,8 +27,13 @@ class Painting {
   bool isNearby(double x, double y, double z, {double radius = 1.0}) {
     if (position == null) return false;
 
-    final distance = Point3D(x: x, y: y, z: z).distanceTo(position!);
-    return distance <= radius;
+    final distance = sqrt(
+      pow(position!.x - x, 2) +
+          pow(position!.y - y, 2) +
+          pow(position!.z - z, 2),
+    );
+
+    return distance <= (detectionRadius + radius);
   }
 
   factory Painting.fromMap(Map<String, dynamic> data, String galleryTitle) {
