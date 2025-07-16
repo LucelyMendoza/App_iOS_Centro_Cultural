@@ -25,10 +25,10 @@ class HomeViewModel extends StateNotifier<HomeState> {
       state = state.copyWith(
         galleries: galleries,
         featuredArtist: Artist(
-          name: 'Rommel Paredes',
-          username: '@rommelparedes',
+          name: 'Vincent van Gogh',
+          username: 'Van Gogh',
           image:
-              'https://upload.wikimedia.org/wikipedia/commons/7/70/User_icon_BLACK-01.png',
+              'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTZJZsgFnT4zllhftV4Q6BzbiaNUbbSPg68Zg&s',
         ),
       );
     } catch (e) {
