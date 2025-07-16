@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "176276096987",
+    "project_id": "beaconlocalization",
+    "storage_bucket": "beaconlocalization.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:176276096987:android:3c45e9057fb6ab85d149fe",
+        "android_client_info": {
+          "package_name": "com.example.mi_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDpXCHbi1i7bpxnG7hyICxRgKXo9z1nY1c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

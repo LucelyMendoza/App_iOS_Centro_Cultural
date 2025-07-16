@@ -14,8 +14,7 @@ class MapaScreen extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   "¡Hola!",
@@ -54,9 +53,9 @@ class MapaScreen extends StatelessWidget {
                     );
                   },
                   child: Text(
-                  "Determine su ubicación",
-                  style: TextStyle(color: Color(0xFFD1AA65), fontSize: 12),
-                ),
+                    "Determine su ubicación",
+                    style: TextStyle(color: Color(0xFFD1AA65), fontSize: 12),
+                  ),
                 ),
               ],
             ),
@@ -82,46 +81,55 @@ class MapaPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 4;
 
-    final textPainter =
-        (
-          String text,
-          Offset offset, {
-          double fontSize = 12,
-          Color color = Colors.black,
-        }) {
-          final textSpan = TextSpan(
-            text: text,
-            style: TextStyle(
-              color: color,
-              fontSize: fontSize,
-              fontWeight: FontWeight.bold,
-            ),
-          );
-          final tp = TextPainter(
-            text: textSpan,
-            textDirection: TextDirection.ltr,
-          );
-          tp.layout();
-          tp.paint(canvas, offset);
-        };
+    textPainter(
+      String text,
+      Offset offset, {
+      double fontSize = 12,
+      Color color = Colors.black,
+    }) {
+      final textSpan = TextSpan(
+        text: text,
+        style: TextStyle(
+          color: color,
+          fontSize: fontSize,
+          fontWeight: FontWeight.bold,
+        ),
+      );
+      final tp = TextPainter(text: textSpan, textDirection: TextDirection.ltr);
+      tp.layout();
+      tp.paint(canvas, offset);
+    }
 
+    // Función que dibuja texto girado 180
+    void drawRotatedText(
+      Canvas canvas,
+      String text,
+      Offset position,
+      Color color,
+    ) {
+      final textSpan = TextSpan(
+        text: text,
+        style: TextStyle(color: color, fontSize: 16),
+      );
+      final textPainter = TextPainter(
+        text: textSpan,
+        textDirection: TextDirection.ltr,
+      );
+      textPainter.layout();
 
-    // Función que dibuja texto girado 180 
-void drawRotatedText(Canvas canvas, String text, Offset position, Color color) {
-  final textSpan = TextSpan(text: text, style: TextStyle(color: color, fontSize: 16));
-  final textPainter = TextPainter(text: textSpan, textDirection: TextDirection.ltr);
-  textPainter.layout();
+      canvas.save();
 
-  canvas.save();
+      canvas.translate(position.dx, position.dy);
 
-  canvas.translate(position.dx, position.dy);
+      canvas.rotate(pi);
 
-  canvas.rotate(pi);
+      textPainter.paint(
+        canvas,
+        Offset(-textPainter.width, -textPainter.height),
+      );
 
-  textPainter.paint(canvas, Offset(-textPainter.width, -textPainter.height));
-
-  canvas.restore();
-}
+      canvas.restore();
+    }
 
     // Dibujo de galerías
     canvas.drawRect(Rect.fromLTWH(30, 370, 200, 70), paint);

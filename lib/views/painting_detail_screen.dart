@@ -4,14 +4,17 @@ import '../models/painting.dart';
 class PaintingDetailScreen extends StatelessWidget {
   final Painting painting;
 
-  const PaintingDetailScreen({Key? key, required this.painting}) : super(key: key);
+  const PaintingDetailScreen({super.key, required this.painting});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         centerTitle: true,
-        title: const Text('Detalles', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Detalles',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.pop(context),
@@ -55,7 +58,10 @@ class PaintingDetailScreen extends StatelessWidget {
                 const SizedBox(width: 6),
                 Text(
                   painting.gallery,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
             ),

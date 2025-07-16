@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'inicio.dart';
 import 'mapa_screen.dart';
-import 'gallery_screen.dart'; // Asegúrate que esta ruta sea correcta
+import 'gallery_screen.dart';
+import 'qr_screen.dart';
 
 class Menu extends StatefulWidget {
   const Menu({super.key});
@@ -16,7 +17,7 @@ class _MenuState extends State<Menu> {
   final List<Widget> _screens = [
     const Inicio(),
     GalleryScreen(),
-    const Center(child: Text('QR (en desarrollo)')),
+    const QrScreen(),
     const MapaScreen(),
   ];
 
@@ -36,7 +37,7 @@ class _MenuState extends State<Menu> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _selectedIndex,
         backgroundColor: const Color(0xFFFFFFFF),
-        selectedItemColor: const Color(0xFF84030C), 
+        selectedItemColor: const Color(0xFF84030C),
         unselectedItemColor: const Color(0xFFE8D5A6),
         selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold),
         type: BottomNavigationBarType.fixed,

@@ -1,16 +1,14 @@
 import 'package:flutter/material.dart';
-import '../models/painting.dart';
 import '../view_models/paintings_viewmodel.dart';
 import 'painting_detail_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../view_models/paintings_viewmodel.dart';
-
 
 class GalleryScreen extends ConsumerWidget {
+  const GalleryScreen({super.key});
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final viewModel = ref.watch(paintingsViewModelAsyncProvider);
-
 
     return viewModel.when(
       data: (vm) {
@@ -28,9 +26,12 @@ class GalleryScreen extends ConsumerWidget {
               final painting = vm.paintings[index];
               return GestureDetector(
                 onTap: () {
-                  Navigator.push(context, MaterialPageRoute(
-                    builder: (_) => PaintingDetailScreen(painting: painting),
-                  ));
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => PaintingDetailScreen(painting: painting),
+                    ),
+                  );
                 },
                 child: GridTile(
                   footer: GridTileBar(
