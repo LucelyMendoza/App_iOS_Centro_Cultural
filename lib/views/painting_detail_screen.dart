@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import '../models/painting.dart';
+import 'dart:async';
+import '../view_models/paintings_viewmodel.dart';
+import 'package:provider/provider.dart';
 
 class PaintingDetailScreen extends StatefulWidget {
   final Painting painting;
@@ -13,11 +16,45 @@ class PaintingDetailScreen extends StatefulWidget {
 
 class _PaintingDetailScreenState extends State<PaintingDetailScreen> {
   final FlutterTts flutterTts = FlutterTts();
+  StreamSubscription<int>? _distSub;
+  bool _hasSpoken = false;
 
   @override
   void initState() {
     super.initState();
     _initTts();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final vm = context.read<PaintingsViewModel>();
+      final g = widget.painting.gallery;
+      final t = widget.painting.title;
+
+      print('📡 Flutter escuchando: /sensor/$g/$t/distancia');
+
+      print('🔁 Llamando a loadDistanceStream()...');
+
+      vm.loadDistanceStream(widget.painting);
+
+      _distSub = vm.distanceStream?.listen((d) {
+        print('🔊 Distancia recibida: $d');
+        final maxCm = widget.painting.detectionRadius * 100;
+        final dentroDeRango = d > 0 && d < maxCm;
+
+        print('📏 Radio máximo permitido: $maxCm cm');
+        print('📌 ¿Está dentro de rango? ${dentroDeRango ? "Sí" : "No"}');
+
+        if (dentroDeRango && !_hasSpoken) {
+          print('🔈 Reproduciendo descripción por TTS...');
+          _speakDescription();
+          _hasSpoken = true;
+        }
+
+        if (!dentroDeRango && _hasSpoken) {
+          print('🚶 Usuario se alejó, reseteando _hasSpoken');
+          _hasSpoken = false;
+        }
+      });
+    });
   }
 
   void _initTts() async {
@@ -31,6 +68,7 @@ class _PaintingDetailScreenState extends State<PaintingDetailScreen> {
 
   @override
   void dispose() {
+    _distSub?.cancel();
     flutterTts.stop();
     super.dispose();
   }
@@ -48,7 +86,7 @@ class _PaintingDetailScreenState extends State<PaintingDetailScreen> {
             child: CircularProgressIndicator(
               value: loadingProgress.expectedTotalBytes != null
                   ? loadingProgress.cumulativeBytesLoaded /
-                        loadingProgress.expectedTotalBytes!
+                      loadingProgress.expectedTotalBytes!
                   : null,
             ),
           );

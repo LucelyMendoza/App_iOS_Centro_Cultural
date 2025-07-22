@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../models/painting.dart';
 import '../services/painting_service.dart';
 import '../views/painting_detail_screen.dart';
+import '../repository/sensor_repository.dart';
+import 'package:provider/provider.dart';
 
 class PaintingsViewModel extends ChangeNotifier {
   List<Painting> allPaintings = [];
@@ -26,8 +28,20 @@ class PaintingsViewModel extends ChangeNotifier {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => PaintingDetailScreen(painting: painting),
+        builder: (_) => ChangeNotifierProvider.value(
+          value: this,
+          child: PaintingDetailScreen(painting: painting),
+        ),
       ),
     );
+  }
+
+  final SensorRepository _sensorRepo = SensorRepository();
+
+  Stream<int>? distanceStream;
+
+  void loadDistanceStream(Painting painting) {
+    print('📥 Cargando stream para: ${painting.gallery} / ${painting.title}');
+    distanceStream = _sensorRepo.getDistanceStream(painting.gallery, painting.title);
   }
 }
