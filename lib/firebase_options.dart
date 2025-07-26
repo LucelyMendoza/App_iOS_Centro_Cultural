@@ -67,4 +67,5 @@ class DefaultFirebaseOptions {
     storageBucket: 'beaconlocalization.firebasestorage.app',
     iosBundleId: 'com.example.miApp',
   );
+
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/gallery.dart';
 import '../models/painting.dart';
 import '../view_models/paintings_viewmodel.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class GalleryDetail extends StatelessWidget {
   final Gallery gallery;
@@ -24,6 +25,10 @@ class GalleryDetail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final List<Painting> paintings = gallery.paintings;
+
+    print(
+      'Pinturas recibidas en GalleryDetail para ${gallery.title}: ${paintings.length}',
+    );
 
     return Scaffold(
       appBar: AppBar(title: Text(gallery.title)),

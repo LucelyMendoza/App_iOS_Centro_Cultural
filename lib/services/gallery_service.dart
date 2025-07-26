@@ -16,6 +16,8 @@ class GalleryService {
           .get();
       final paintings = paintingsSnapshot.docs.map((paintingDoc) {
         final p = paintingDoc.data();
+        print('Cargando pintura: ${p['title']}'); // <--- Agrega esto
+
         return Painting(
           title: p['title'],
           author: p['author'],
@@ -25,6 +27,9 @@ class GalleryService {
           gallery: galleryData['title'],
         );
       }).toList();
+      print(
+        'Galería: ${galleryData['title']}, Pinturas cargadas: ${paintings.length}',
+      );
 
       galleries.add(
         Gallery(

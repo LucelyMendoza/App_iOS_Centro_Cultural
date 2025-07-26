@@ -1,14 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/selected_gallery_provider.dart';
+import '../view_models/providers.dart';
+import '../models/painting.dart';
 import 'dart:math';
 
-class MapaScreen extends StatelessWidget {
+class MapaScreen extends ConsumerWidget {
   const MapaScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final viewModel = ref.watch(paintingsViewModelProvider);
+
     return Scaffold(
-      backgroundColor: Color(0xFFFFFFFF),
-      appBar: AppBar(title: Text(""), backgroundColor: Color(0xFFFFFFFF)),
+      backgroundColor: const Color(0xFFFFFFFF),
+      appBar: AppBar(
+        title: const Text(""),
+        backgroundColor: const Color(0xFFFFFFFF),
+      ),
       body: Column(
         children: [
           Padding(
@@ -16,12 +25,12 @@ class MapaScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                const Text(
                   "¡Hola!",
                   style: TextStyle(color: Colors.green, fontSize: 16),
                 ),
-                SizedBox(height: 4),
-                Text(
+                const SizedBox(height: 4),
+                const Text(
                   "Utiliza nuestro plano interactivo",
                   style: TextStyle(
                     color: Color(0xFF84030C),
@@ -29,30 +38,65 @@ class MapaScreen extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                SizedBox(height: 10),
+                const SizedBox(height: 10),
                 Row(
-                  children: [
+                  children: const [
                     Icon(Icons.location_on, color: Color(0xFF84030C)),
                     SizedBox(width: 4),
                     Text("San Agustin 106 - Arequipa"),
                   ],
                 ),
-                SizedBox(height: 10),
+                const SizedBox(height: 10),
               ],
             ),
           ),
 
           Expanded(
-            child: Container(
-              child: FittedBox(
-                fit: BoxFit.contain,
-                child: CustomPaint(
-                  painter: MapaPainter(),
-                  child: Container(
-                    width: 370, // Tamaño base del mapa
-                    height: 443,
+            child: FittedBox(
+              fit: BoxFit.contain,
+              child: Stack(
+                children: [
+                  /// Mapa pintado
+                  CustomPaint(
+                    size: const Size(370, 443),
+                    painter: MapaPainter(),
                   ),
-                ),
+
+                  /// Zona táctil para Galería I
+                  Positioned(
+                    left: 30,
+                    top: 390,
+                    width: 200,
+                    height: 50,
+                    child: GestureDetector(
+                      onTap: () async {
+                        final galleryId = 'galeria1'; // ID real en Firestore
+                        final galleryTitle = 'Galería I';
+
+                        final paintings = await ref
+                            .read(paintingsViewModelProvider.notifier)
+                            .fetchPaintingsFromFirestore(galleryId);
+
+                        Navigator.pushNamed(
+                          context,
+                          '/paintings',
+                          arguments: {
+                            'galleryTitle': galleryTitle,
+                            'paintings': paintings,
+                          },
+                        );
+                      },
+
+                      child: Container(
+                        color: Colors.transparent,
+                        height: 100,
+                        width: 100,
+                      ),
+                    ),
+                  ),
+
+                  // Puedes repetir esto para otras galerías con su respectiva posición
+                ],
               ),
             ),
           ),

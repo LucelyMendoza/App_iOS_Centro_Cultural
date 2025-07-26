@@ -10,8 +10,13 @@ class PaintingsViewModel extends ChangeNotifier {
   final PaintingService _service = PaintingService();
 
   Future<void> loadPaintings() async {
-    allPaintings = await _service.fetchAllPaintings();
-    notifyListeners();
+    try {
+      allPaintings = await _service.fetchAllPaintings();
+      print('✅ ${allPaintings.length} pinturas cargadas');
+      notifyListeners();
+    } catch (e) {
+      print('❌ Error al cargar pinturas: $e');
+    }
   }
 
   List<Painting> filterPaintings(String query) {
@@ -42,6 +47,19 @@ class PaintingsViewModel extends ChangeNotifier {
 
   void loadDistanceStream(Painting painting) {
     print('📥 Cargando stream para: ${painting.gallery} / ${painting.title}');
-    distanceStream = _sensorRepo.getDistanceStream(painting.gallery, painting.title);
+    distanceStream = _sensorRepo.getDistanceStream(
+      painting.gallery,
+      painting.title,
+    );
+  }
+
+  Future<List<Painting>> fetchPaintingsFromFirestore(String galleryId) async {
+    try {
+      final snapshot = await _service.fetchPaintingsFromGallery(galleryId);
+      return snapshot;
+    } catch (e) {
+      print('❌ Error al obtener pinturas de $galleryId: $e');
+      return [];
+    }
   }
 }
