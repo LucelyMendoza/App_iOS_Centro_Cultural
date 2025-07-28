@@ -95,7 +95,173 @@ class MapaScreen extends ConsumerWidget {
                     ),
                   ),
 
-                  // Puedes repetir esto para otras galerías con su respectiva posición
+                  /// Galería II
+                  Positioned(
+                    left: 30,
+                    top: 280,
+                    width: 60,
+                    height: 160,
+                    child: GestureDetector(
+                      onTap: () async {
+                        final galleryId = 'galeria2';
+                        final galleryTitle = 'Galería II';
+
+                        final paintings = await ref
+                            .read(paintingsViewModelProvider.notifier)
+                            .fetchPaintingsFromFirestore(galleryId);
+
+                        Navigator.pushNamed(
+                          context,
+                          '/paintings',
+                          arguments: {
+                            'galleryTitle': galleryTitle,
+                            'paintings': paintings,
+                          },
+                        );
+                      },
+                      child: Container(color: Colors.transparent),
+                    ),
+                  ),
+
+                  /// Galería III
+                  Positioned(
+                    left: 90,
+                    top: 280,
+                    width: 140,
+                    height: 50,
+                    child: GestureDetector(
+                      onTap: () async {
+                        final galleryId = 'galeria3';
+                        final galleryTitle = 'Galería III';
+
+                        final paintings = await ref
+                            .read(paintingsViewModelProvider.notifier)
+                            .fetchPaintingsFromFirestore(galleryId);
+
+                        Navigator.pushNamed(
+                          context,
+                          '/paintings',
+                          arguments: {
+                            'galleryTitle': galleryTitle,
+                            'paintings': paintings,
+                          },
+                        );
+                      },
+                      child: Container(color: Colors.transparent),
+                    ),
+                  ),
+
+                  /// Galería IV
+                  Positioned(
+                    left: 290,
+                    top: 330,
+                    width: 50,
+                    height: 110,
+                    child: GestureDetector(
+                      onTap: () async {
+                        final galleryId = 'galeria4';
+                        final galleryTitle = 'Galería IV';
+
+                        final paintings = await ref
+                            .read(paintingsViewModelProvider.notifier)
+                            .fetchPaintingsFromFirestore(galleryId);
+
+                        Navigator.pushNamed(
+                          context,
+                          '/paintings',
+                          arguments: {
+                            'galleryTitle': galleryTitle,
+                            'paintings': paintings,
+                          },
+                        );
+                      },
+                      child: Container(color: Colors.transparent),
+                    ),
+                  ),
+
+                  /// Galería V
+                  Positioned(
+                    left: 290,
+                    top: 280,
+                    width: 50,
+                    height: 50,
+                    child: GestureDetector(
+                      onTap: () async {
+                        final galleryId = 'galeria5';
+                        final galleryTitle = 'Galería V';
+
+                        final paintings = await ref
+                            .read(paintingsViewModelProvider.notifier)
+                            .fetchPaintingsFromFirestore(galleryId);
+
+                        Navigator.pushNamed(
+                          context,
+                          '/paintings',
+                          arguments: {
+                            'galleryTitle': galleryTitle,
+                            'paintings': paintings,
+                          },
+                        );
+                      },
+                      child: Container(color: Colors.transparent),
+                    ),
+                  ),
+
+                  /// Galería VI
+                  Positioned(
+                    left: 30,
+                    top: 110,
+                    width: 60,
+                    height: 130,
+                    child: GestureDetector(
+                      onTap: () async {
+                        final galleryId = 'galeria6';
+                        final galleryTitle = 'Galería VI';
+
+                        final paintings = await ref
+                            .read(paintingsViewModelProvider.notifier)
+                            .fetchPaintingsFromFirestore(galleryId);
+
+                        Navigator.pushNamed(
+                          context,
+                          '/paintings',
+                          arguments: {
+                            'galleryTitle': galleryTitle,
+                            'paintings': paintings,
+                          },
+                        );
+                      },
+                      child: Container(color: Colors.transparent),
+                    ),
+                  ),
+
+                  /// Galería VII
+                  Positioned(
+                    left: 90,
+                    top: 110,
+                    width: 140,
+                    height: 50,
+                    child: GestureDetector(
+                      onTap: () async {
+                        final galleryId = 'galeria7';
+                        final galleryTitle = 'Galería VII';
+
+                        final paintings = await ref
+                            .read(paintingsViewModelProvider.notifier)
+                            .fetchPaintingsFromFirestore(galleryId);
+
+                        Navigator.pushNamed(
+                          context,
+                          '/paintings',
+                          arguments: {
+                            'galleryTitle': galleryTitle,
+                            'paintings': paintings,
+                          },
+                        );
+                      },
+                      child: Container(color: Colors.transparent),
+                    ),
+                  ),
                 ],
               ),
             ),
