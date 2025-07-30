@@ -12,7 +12,6 @@ class PatientListScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Pacientes'),
-        // ❌ Botón de logout eliminado porque ya no hay auth
       ),
       body: StreamBuilder<List<Patient>>(
         stream: Provider.of<DatabaseService>(context).getPatients(),
@@ -29,22 +28,17 @@ class PatientListScreen extends StatelessWidget {
             itemCount: snapshot.data!.length,
             itemBuilder: (context, index) {
               final patient = snapshot.data![index];
-              return Card(
-                margin: const EdgeInsets.all(8.0),
-                child: ListTile(
-                  leading: Icon(Icons.monitor_heart, color: patient.statusColor),
-                  title: Text(patient.name),
-                  subtitle: Text('SpO₂: ${patient.spo2 ?? '--'}% - ${patient.status}'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => PatientDetailScreen(patientId: patient.id),
-                      ),
-                    );
-                  },
-                ),
+              return ListTile(
+                title: Text(patient.name),
+                subtitle: Text('SpO2: ${patient.spo2 ?? '--'}%'),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => PatientDetailScreen(patientId: patient.id),
+                    ),
+                  );
+                },
               );
             },
           );
