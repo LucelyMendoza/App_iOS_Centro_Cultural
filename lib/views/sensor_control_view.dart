@@ -5,9 +5,7 @@ import 'package:mi_app/firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const MyApp());
 }
 
@@ -70,8 +68,13 @@ class _SensorControlViewState extends State<SensorControlView> {
               builder: (context, snapshot) {
                 if (snapshot.hasData && snapshot.data!.snapshot.value != null) {
                   final temp = snapshot.data!.snapshot.value;
-                  return Text('$temp °C',
-                      style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold));
+                  return Text(
+                    '$temp °C',
+                    style: const TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  );
                 }
                 return const CircularProgressIndicator();
               },
@@ -81,12 +84,9 @@ class _SensorControlViewState extends State<SensorControlView> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('Encender', style: TextStyle(fontSize: 18)),
-                Switch(
-                  value: heaterState,
-                  onChanged: _toggleHeater,
-                ),
+                Switch(value: heaterState, onChanged: _toggleHeater),
               ],
-            )
+            ),
           ],
         ),
       ),

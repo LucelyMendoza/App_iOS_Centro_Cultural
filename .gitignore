@@ -43,3 +43,4 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+beaconlocalization-firebase-adminsdk-fbsvc-a93f530661.json

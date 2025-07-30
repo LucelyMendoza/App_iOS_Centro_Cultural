@@ -19,10 +19,22 @@ class Menu extends StatelessWidget {
           activeColor: const Color(0xFF84030C),
           inactiveColor: const Color(0xFFE8D5A6),
           items: const [
-            BottomNavigationBarItem(icon: Icon(CupertinoIcons.home), label: 'Home'),
-            BottomNavigationBarItem(icon: Icon(CupertinoIcons.search), label: 'Búsqueda'),
-            BottomNavigationBarItem(icon: Icon(CupertinoIcons.location), label: 'Ubicación'),
-            BottomNavigationBarItem(icon: Icon(CupertinoIcons.map), label: 'Mapa'),
+            BottomNavigationBarItem(
+              icon: Icon(CupertinoIcons.home),
+              label: 'Home',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(CupertinoIcons.search),
+              label: 'Búsqueda',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(CupertinoIcons.location),
+              label: 'Ubicación',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(CupertinoIcons.map),
+              label: 'Mapa',
+            ),
           ],
         ),
         tabBuilder: (context, index) {
@@ -32,9 +44,7 @@ class Menu extends StatelessWidget {
             UbicacionPage(),
             const MapaScreen(),
           ];
-          return CupertinoPageScaffold(
-            child: screens[index],
-          );
+          return CupertinoPageScaffold(child: screens[index]);
         },
       );
     } else {
@@ -70,10 +80,7 @@ class _MenuMaterialState extends State<MenuMaterial> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: _screens,
-      ),
+      body: IndexedStack(index: _selectedIndex, children: _screens),
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
         child: Container(
@@ -100,8 +107,14 @@ class _MenuMaterialState extends State<MenuMaterial> {
               onTap: _onTap,
               items: const [
                 BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-                BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Búsqueda'),
-                BottomNavigationBarItem(icon: Icon(Icons.location_on), label: 'Ubicación'),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.search),
+                  label: 'Búsqueda',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.location_on),
+                  label: 'Ubicación',
+                ),
                 BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Mapa'),
               ],
             ),
