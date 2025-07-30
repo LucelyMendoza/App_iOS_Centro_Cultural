@@ -1,3 +1,14 @@
+## 📱 Cómo descargar el APK
+
+Puedes instalar la aplicación Flutter descargando el archivo `.apk` directamente:
+
+1. Ir a la carpeta `lib/` dentro del proyecto.
+2. Buscar el archivo: `app-release.apk`
+3. Transferirlo a tu dispositivo Android e instalarlo manualmente.
+
+> Asegúrate de habilitar la opción "Instalar apps de fuentes desconocidas" en tu dispositivo.
+
+---
 ## 🧪 Prueba del sensor ultrasónico (sin hardware)
 
 Este proyecto permite activar audio automáticamente al detectar proximidad a una obra mediante un sensor ultrasónico conectado a un ESP32. Para pruebas sin el dispositivo físico, se puede simular el funcionamiento modificando manualmente los valores en Firebase.
