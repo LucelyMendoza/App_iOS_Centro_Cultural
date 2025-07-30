@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import '../models/painting.dart';
+import 'dart:async';
+import '../view_models/paintings_viewmodel.dart';
+import 'package:provider/provider.dart';
 
 class PaintingDetailScreen extends StatefulWidget {
   final Painting painting;
@@ -13,16 +16,50 @@ class PaintingDetailScreen extends StatefulWidget {
 
 class _PaintingDetailScreenState extends State<PaintingDetailScreen> {
   final FlutterTts flutterTts = FlutterTts();
+  StreamSubscription<int>? _distSub;
+  bool _hasSpoken = false;
 
   @override
   void initState() {
     super.initState();
     _initTts();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final vm = context.read<PaintingsViewModel>();
+      final g = widget.painting.gallery;
+      final t = widget.painting.title;
+
+      print('📡 Flutter escuchando: /sensor/$g/$t/distancia');
+
+      print('🔁 Llamando a loadDistanceStream()...');
+
+      vm.loadDistanceStream(widget.painting);
+
+      _distSub = vm.distanceStream?.listen((d) {
+        print('🔊 Distancia recibida: $d');
+        final maxCm = widget.painting.detectionRadius * 100;
+        final dentroDeRango = d > 0 && d < maxCm;
+
+        print('📏 Radio máximo permitido: $maxCm cm');
+        print('📌 ¿Está dentro de rango? ${dentroDeRango ? "Sí" : "No"}');
+
+        if (dentroDeRango && !_hasSpoken) {
+          print('🔈 Reproduciendo descripción por TTS...');
+          _speakDescription();
+          _hasSpoken = true;
+        }
+
+        if (!dentroDeRango && _hasSpoken) {
+          print('🚶 Usuario se alejó, reseteando _hasSpoken');
+          _hasSpoken = false;
+        }
+      });
+    });
   }
 
   void _initTts() async {
-    await flutterTts.setLanguage("es-ES"); // Español
-    await flutterTts.setSpeechRate(0.5); // Velocidad de lectura
+    await flutterTts.setLanguage("es-ES");
+    await flutterTts.setSpeechRate(0.5);
   }
 
   void _speakDescription() async {
@@ -31,8 +68,42 @@ class _PaintingDetailScreenState extends State<PaintingDetailScreen> {
 
   @override
   void dispose() {
-    flutterTts.stop(); // Detiene el TTS si se cambia de pantalla
+    _distSub?.cancel();
+    flutterTts.stop();
     super.dispose();
+  }
+
+  Widget buildImage(String path) {
+    if (path.startsWith('http')) {
+      return Image.network(
+        path,
+        width: 280,
+        height: 280,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Center(
+            child: CircularProgressIndicator(
+              value: loadingProgress.expectedTotalBytes != null
+                  ? loadingProgress.cumulativeBytesLoaded /
+                      loadingProgress.expectedTotalBytes!
+                  : null,
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) =>
+            const Icon(Icons.broken_image),
+      );
+    } else {
+      return Image.asset(
+        path,
+        width: 280,
+        height: 280,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) =>
+            const Icon(Icons.broken_image),
+      );
+    }
   }
 
   @override
@@ -59,12 +130,7 @@ class _PaintingDetailScreenState extends State<PaintingDetailScreen> {
             Center(
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(20),
-                child: Image.asset(
-                  painting.imagePath,
-                  width: 280,
-                  height: 280,
-                  fit: BoxFit.cover,
-                ),
+                child: buildImage(painting.imagePath),
               ),
             ),
             const SizedBox(height: 20),
@@ -75,7 +141,6 @@ class _PaintingDetailScreenState extends State<PaintingDetailScreen> {
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
               ),
-              textAlign: TextAlign.left,
             ),
             const SizedBox(height: 6),
             Row(

@@ -1,40 +1,65 @@
+import 'package:flutter/material.dart';
 import '../models/painting.dart';
+import '../services/painting_service.dart';
+import '../views/painting_detail_screen.dart';
+import '../repository/sensor_repository.dart';
+import 'package:provider/provider.dart';
 
-class PaintingsViewModel {
-  List<Painting> allPaintings = [
-    Painting(
-      imagePath: 'assets/libertad.png',
-      title: 'La Libertad',
-      details: 'Representación de la libertad en la historia del Perú.',
-      gallery: 'Galería 2',
-      year: '1821',
-      author: 'Juan Pérez',
-    ),
-    Painting(
-      imagePath: 'assets/misti.png',
-      title: 'Volcán Misti',
-      details: 'El majestuoso volcán Misti en un atardecer arequipeño.',
-      gallery: 'Galería 3',
-      year: '2020',
-      author: 'María García',
-    ),
-    Painting(
-      imagePath: 'assets/atardecer.jpg',
-      title: 'Atardecer Andino',
-      details: 'Un atardecer en los Andes peruanos lleno de color.',
-      gallery: 'Galería 1',
-      year: '2018',
-      author: 'Carlos Huamán',
-    ),
-  ];
+class PaintingsViewModel extends ChangeNotifier {
+  List<Painting> allPaintings = [];
+  final PaintingService _service = PaintingService();
+
+  Future<void> loadPaintings() async {
+    try {
+      allPaintings = await _service.fetchAllPaintings();
+      print('✅ ${allPaintings.length} pinturas cargadas');
+      notifyListeners();
+    } catch (e) {
+      print('❌ Error al cargar pinturas: $e');
+    }
+  }
 
   List<Painting> filterPaintings(String query) {
     return allPaintings
         .where(
-          (painting) =>
-              painting.title.toLowerCase().contains(query.toLowerCase()) ||
-              painting.author.toLowerCase().contains(query.toLowerCase()),
+          (p) =>
+              p.title.toLowerCase().contains(query.toLowerCase()) ||
+              p.author.toLowerCase().contains(query.toLowerCase()),
         )
         .toList();
+  }
+
+  void goToPaintingDetail(BuildContext context, Painting painting) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChangeNotifierProvider.value(
+          value: this,
+          child: PaintingDetailScreen(painting: painting),
+        ),
+      ),
+    );
+  }
+
+  final SensorRepository _sensorRepo = SensorRepository();
+
+  Stream<int>? distanceStream;
+
+  void loadDistanceStream(Painting painting) {
+    print('📥 Cargando stream para: ${painting.gallery} / ${painting.title}');
+    distanceStream = _sensorRepo.getDistanceStream(
+      painting.gallery,
+      painting.title,
+    );
+  }
+
+  Future<List<Painting>> fetchPaintingsFromFirestore(String galleryId) async {
+    try {
+      final snapshot = await _service.fetchPaintingsFromGallery(galleryId);
+      return snapshot;
+    } catch (e) {
+      print('❌ Error al obtener pinturas de $galleryId: $e');
+      return [];
+    }
   }
 }

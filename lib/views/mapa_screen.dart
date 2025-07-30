@@ -1,14 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/selected_gallery_provider.dart';
+import '../view_models/providers.dart';
+import '../models/painting.dart';
 import 'dart:math';
 
-class MapaScreen extends StatelessWidget {
+class MapaScreen extends ConsumerWidget {
   const MapaScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final viewModel = ref.watch(paintingsViewModelProvider);
+
     return Scaffold(
-      backgroundColor: Color(0xFFFFFFFF),
-      appBar: AppBar(title: Text(""), backgroundColor: Color(0xFFFFFFFF)),
+      backgroundColor: const Color(0xFFFFFFFF),
+      appBar: AppBar(
+        title: const Text(""),
+        backgroundColor: const Color(0xFFFFFFFF),
+      ),
       body: Column(
         children: [
           Padding(
@@ -16,12 +25,12 @@ class MapaScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                const Text(
                   "¡Hola!",
                   style: TextStyle(color: Colors.green, fontSize: 16),
                 ),
-                SizedBox(height: 4),
-                Text(
+                const SizedBox(height: 4),
+                const Text(
                   "Utiliza nuestro plano interactivo",
                   style: TextStyle(
                     color: Color(0xFF84030C),
@@ -29,49 +38,231 @@ class MapaScreen extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                SizedBox(height: 10),
+                const SizedBox(height: 10),
                 Row(
-                  children: [
+                  children: const [
                     Icon(Icons.location_on, color: Color(0xFF84030C)),
                     SizedBox(width: 4),
                     Text("San Agustin 106 - Arequipa"),
                   ],
                 ),
-                SizedBox(height: 10),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Color(0xFF84030C),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text("Ubicación no disponible por ahora"),
-                      ),
-                    );
-                  },
-                  child: Text(
-                    "Determine su ubicación",
-                    style: TextStyle(color: Color(0xFFD1AA65), fontSize: 12),
-                  ),
-                ),
+                const SizedBox(height: 10),
               ],
             ),
           ),
 
           Expanded(
-            child: Container(
-              child: FittedBox(
-                fit: BoxFit.contain,
-                child: CustomPaint(
-                  painter: MapaPainter(),
-                  child: Container(
-                    width: 370, // Tamaño base del mapa
-                    height: 443,
+            child: FittedBox(
+              fit: BoxFit.contain,
+              child: Stack(
+                children: [
+                  /// Mapa pintado
+                  CustomPaint(
+                    size: const Size(370, 443),
+                    painter: MapaPainter(),
                   ),
-                ),
+
+                  /// Zona táctil para Galería I
+                  Positioned(
+                    left: 30,
+                    top: 390,
+                    width: 200,
+                    height: 50,
+                    child: GestureDetector(
+                      onTap: () async {
+                        final galleryId = 'galeria1'; // ID real en Firestore
+                        final galleryTitle = 'Galería I';
+
+                        final paintings = await ref
+                            .read(paintingsViewModelProvider.notifier)
+                            .fetchPaintingsFromFirestore(galleryId);
+
+                        Navigator.pushNamed(
+                          context,
+                          '/paintings',
+                          arguments: {
+                            'galleryTitle': galleryTitle,
+                            'paintings': paintings,
+                          },
+                        );
+                      },
+
+                      child: Container(
+                        color: Colors.transparent,
+                        height: 100,
+                        width: 100,
+                      ),
+                    ),
+                  ),
+
+                  /// Galería II
+                  Positioned(
+                    left: 30,
+                    top: 280,
+                    width: 60,
+                    height: 160,
+                    child: GestureDetector(
+                      onTap: () async {
+                        final galleryId = 'galeria2';
+                        final galleryTitle = 'Galería II';
+
+                        final paintings = await ref
+                            .read(paintingsViewModelProvider.notifier)
+                            .fetchPaintingsFromFirestore(galleryId);
+
+                        Navigator.pushNamed(
+                          context,
+                          '/paintings',
+                          arguments: {
+                            'galleryTitle': galleryTitle,
+                            'paintings': paintings,
+                          },
+                        );
+                      },
+                      child: Container(color: Colors.transparent),
+                    ),
+                  ),
+
+                  /// Galería III
+                  Positioned(
+                    left: 90,
+                    top: 280,
+                    width: 140,
+                    height: 50,
+                    child: GestureDetector(
+                      onTap: () async {
+                        final galleryId = 'galeria3';
+                        final galleryTitle = 'Galería III';
+
+                        final paintings = await ref
+                            .read(paintingsViewModelProvider.notifier)
+                            .fetchPaintingsFromFirestore(galleryId);
+
+                        Navigator.pushNamed(
+                          context,
+                          '/paintings',
+                          arguments: {
+                            'galleryTitle': galleryTitle,
+                            'paintings': paintings,
+                          },
+                        );
+                      },
+                      child: Container(color: Colors.transparent),
+                    ),
+                  ),
+
+                  /// Galería IV
+                  Positioned(
+                    left: 290,
+                    top: 330,
+                    width: 50,
+                    height: 110,
+                    child: GestureDetector(
+                      onTap: () async {
+                        final galleryId = 'galeria4';
+                        final galleryTitle = 'Galería IV';
+
+                        final paintings = await ref
+                            .read(paintingsViewModelProvider.notifier)
+                            .fetchPaintingsFromFirestore(galleryId);
+
+                        Navigator.pushNamed(
+                          context,
+                          '/paintings',
+                          arguments: {
+                            'galleryTitle': galleryTitle,
+                            'paintings': paintings,
+                          },
+                        );
+                      },
+                      child: Container(color: Colors.transparent),
+                    ),
+                  ),
+
+                  /// Galería V
+                  Positioned(
+                    left: 290,
+                    top: 280,
+                    width: 50,
+                    height: 50,
+                    child: GestureDetector(
+                      onTap: () async {
+                        final galleryId = 'galeria5';
+                        final galleryTitle = 'Galería V';
+
+                        final paintings = await ref
+                            .read(paintingsViewModelProvider.notifier)
+                            .fetchPaintingsFromFirestore(galleryId);
+
+                        Navigator.pushNamed(
+                          context,
+                          '/paintings',
+                          arguments: {
+                            'galleryTitle': galleryTitle,
+                            'paintings': paintings,
+                          },
+                        );
+                      },
+                      child: Container(color: Colors.transparent),
+                    ),
+                  ),
+
+                  /// Galería VI
+                  Positioned(
+                    left: 30,
+                    top: 110,
+                    width: 60,
+                    height: 130,
+                    child: GestureDetector(
+                      onTap: () async {
+                        final galleryId = 'galeria6';
+                        final galleryTitle = 'Galería VI';
+
+                        final paintings = await ref
+                            .read(paintingsViewModelProvider.notifier)
+                            .fetchPaintingsFromFirestore(galleryId);
+
+                        Navigator.pushNamed(
+                          context,
+                          '/paintings',
+                          arguments: {
+                            'galleryTitle': galleryTitle,
+                            'paintings': paintings,
+                          },
+                        );
+                      },
+                      child: Container(color: Colors.transparent),
+                    ),
+                  ),
+
+                  /// Galería VII
+                  Positioned(
+                    left: 90,
+                    top: 110,
+                    width: 140,
+                    height: 50,
+                    child: GestureDetector(
+                      onTap: () async {
+                        final galleryId = 'galeria7';
+                        final galleryTitle = 'Galería VII';
+
+                        final paintings = await ref
+                            .read(paintingsViewModelProvider.notifier)
+                            .fetchPaintingsFromFirestore(galleryId);
+
+                        Navigator.pushNamed(
+                          context,
+                          '/paintings',
+                          arguments: {
+                            'galleryTitle': galleryTitle,
+                            'paintings': paintings,
+                          },
+                        );
+                      },
+                      child: Container(color: Colors.transparent),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
