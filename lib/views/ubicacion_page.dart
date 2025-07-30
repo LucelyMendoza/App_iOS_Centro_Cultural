@@ -2,15 +2,16 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class UbicacionPage extends StatefulWidget {
+class UbicacionPage extends ConsumerStatefulWidget {
   const UbicacionPage({super.key});
 
   @override
   _UbicacionPageState createState() => _UbicacionPageState();
 }
 
-class _UbicacionPageState extends State<UbicacionPage> {
+class _UbicacionPageState extends ConsumerState<UbicacionPage> {
   final String tuUUID = "b9407f30-f5f8-466e-aff9-25556b57fe6d";
   bool isScanning = false;
   Map<DeviceIdentifier, List<int>> historialRssi = {};
