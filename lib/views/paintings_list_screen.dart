@@ -23,6 +23,22 @@ class __PaintingsListContentState extends State<_PaintingsListContent> {
   String searchQuery = '';
   bool isLoading = true;
 
+  // Filtros seleccionados
+  String? selectedAuthor;
+  String? selectedGallery;
+  String? selectedYear;
+
+  @override
+  void initState() {
+    super.initState();
+    viewModel.loadPaintings().then((_) {
+      setState(() {
+        filteredPaintings = viewModel.allPaintings;
+        isLoading = false;
+      });
+    });
+  }
+
   Widget buildImage(String path) {
     if (path.startsWith('http')) {
       return Image.network(
@@ -34,7 +50,7 @@ class __PaintingsListContentState extends State<_PaintingsListContent> {
             child: CircularProgressIndicator(
               value: loadingProgress.expectedTotalBytes != null
                   ? loadingProgress.cumulativeBytesLoaded /
-                        loadingProgress.expectedTotalBytes!
+                      loadingProgress.expectedTotalBytes!
                   : null,
             ),
           );
@@ -52,17 +68,6 @@ class __PaintingsListContentState extends State<_PaintingsListContent> {
     }
   }
 
-  @override
-  void initState() {
-    super.initState();
-    viewModel.loadPaintings().then((_) {
-      setState(() {
-        filteredPaintings = viewModel.allPaintings;
-        isLoading = false;
-      });
-    });
-  }
-
   void updateSearch(String query) {
     setState(() {
       searchQuery = query;
@@ -70,16 +75,83 @@ class __PaintingsListContentState extends State<_PaintingsListContent> {
     });
   }
 
+  List<String> getUniqueAuthors() => viewModel.allPaintings.map((p) => p.author).toSet().toList();
+  List<String> getUniqueGalleries() => viewModel.allPaintings.map((p) => p.gallery).toSet().toList();
+  List<String> getUniqueYears() => viewModel.allPaintings.map((p) => p.year).toSet().toList();
+
   void filterDialog() {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Filtrar'),
-        content: const Text('Aquí puedes agregar filtros personalizados.'),
+        title: const Text('Filtrar obras'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                value: selectedAuthor,
+                decoration: const InputDecoration(labelText: 'Autor'),
+                items: getUniqueAuthors()
+                    .map((author) => DropdownMenuItem(
+                          value: author,
+                          child: Text(author),
+                        ))
+                    .toList(),
+                onChanged: (value) => setState(() => selectedAuthor = value),
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                value: selectedGallery,
+                decoration: const InputDecoration(labelText: 'Galería'),
+                items: getUniqueGalleries()
+                    .map((gallery) => DropdownMenuItem(
+                          value: gallery,
+                          child: Text(gallery),
+                        ))
+                    .toList(),
+                onChanged: (value) => setState(() => selectedGallery = value),
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                value: selectedYear,
+                decoration: const InputDecoration(labelText: 'Año'),
+                items: getUniqueYears()
+                    .map((year) => DropdownMenuItem(
+                          value: year,
+                          child: Text(year),
+                        ))
+                    .toList(),
+                onChanged: (value) => setState(() => selectedYear = value),
+              ),
+            ],
+          ),
+        ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cerrar'),
+            onPressed: () {
+              setState(() {
+                selectedAuthor = null;
+                selectedGallery = null;
+                selectedYear = null;
+                filteredPaintings = viewModel.allPaintings;
+              });
+              Navigator.pop(context);
+            },
+            child: const Text('Limpiar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              setState(() {
+                filteredPaintings = viewModel.allPaintings.where((painting) {
+                  final matchAuthor = selectedAuthor == null || painting.author == selectedAuthor;
+                  final matchGallery = selectedGallery == null || painting.gallery == selectedGallery;
+                  final matchYear = selectedYear == null || painting.year == selectedYear;
+                  return matchAuthor && matchGallery && matchYear;
+                }).toList();
+              });
+              Navigator.pop(context);
+            },
+            child: const Text('Aplicar'),
           ),
         ],
       ),
